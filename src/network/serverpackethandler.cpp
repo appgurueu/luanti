@@ -3,6 +3,7 @@
 // Copyright (C) 2015 nerzhul, Loic Blot <loic.blot@unix-experience.fr>
 
 #include "chatmessage.h"
+#include "irr_v3d.h"
 #include "server.h"
 #include "log.h"
 #include "emerge.h"
@@ -907,6 +908,18 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 		return;
 	}
 
+	if (pointed.type == POINTEDTHING_NODE) {
+		const auto under = v3s32::from(pointed.node_undersurface);
+		const auto above = v3s32::from(pointed.node_abovesurface);
+		v3s32 normal = under - above;
+		if (normal.getLengthSQ() != 1) {
+			actionstream << "Server: " << player->getName()
+					<< " provided invalid pointed thing" << std::endl;
+			m_script->on_cheat(playersao, "invalid_pointed_thing");
+			return;
+		}
+	}
+
 	if (playersao->isDead()) {
 		actionstream << "Server: " << player->getName()
 				<< " tried to interact while dead; ignoring." << std::endl;
@@ -1213,8 +1226,8 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 				return;
 
 			if (m_nodedef->get(node_under.getContent()).pointable != PointabilityType::POINTABLE) {
-				infostream << "Player" << player->getName()
-					<< " tried to place a node on unpointable node at "
+				actionstream << "Player" << player->getName()
+					<< " tried to place a node against an unpointable node at "
 					<< pointed.node_undersurface << "; ignoring." << std::endl;
 				// Note: It is possible that this happens due to lag.
 				m_script->on_cheat(playersao, "likely_placed_on_unpointable_node");
