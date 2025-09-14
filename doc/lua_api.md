@@ -6257,6 +6257,10 @@ Call these functions only at load time!
         * `finished_unknown_dig`
         * `dug_unbreakable`
         * `dug_too_fast`
+        * `invalid_pointed_thing`
+        * `likely_placed_on_unpointable_node`
+          * tried to place a node against an unpointable node (e.g. air)
+          * may be a false positive with lag
 * `core.register_on_chat_message(function(name, message))`
     * Called always when a player says something
     * Return `true` to mark the message as handled, which means that it will
