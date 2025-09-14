@@ -15,6 +15,7 @@
 #include "serialization.h"
 #include "settings.h"
 #include "tool.h"
+#include "util/pointabilities.h"
 #include "version.h"
 #include "irrlicht_changes/printing.h"
 #include "network/connection.h"
@@ -1199,30 +1200,46 @@ void Server::handleCommand_Interact(NetworkPacket *pkt)
 			}
 
 			pointed_object->rightClick(playersao);
-		} else if (m_script->item_OnPlace(selected_item, playersao, pointed)) {
-			// Placement was handled in lua
-
-			// Apply returned ItemStack
-			if (selected_item.has_value() && playersao->setWieldedItem(*selected_item))
-				SendInventory(player, true);
-		}
-
-		if (pointed.type != POINTEDTHING_NODE)
-			return;
-
-		// If item has node placement prediction, always send the
-		// blocks to make sure the client knows what exactly happened
-		RemoteClient *client = getClient(peer_id);
-		v3s16 blockpos = getNodeBlockPos(pointed.node_abovesurface);
-		v3s16 blockpos2 = getNodeBlockPos(pointed.node_undersurface);
-		if (had_prediction) {
-			client->SetBlockNotSent(blockpos);
-			if (blockpos2 != blockpos)
-				client->SetBlockNotSent(blockpos2);
 		} else {
-			client->ResendBlockIfOnWire(blockpos);
-			if (blockpos2 != blockpos)
-				client->ResendBlockIfOnWire(blockpos2);
+			// Place a node
+
+			if (pointed.type != POINTEDTHING_NODE)
+				return;
+
+			bool pos_ok;
+			MapNode node_under = m_env->getMap().getNode(
+					pointed.node_undersurface, &pos_ok);
+			if (!pos_ok)
+				return;
+
+			if (m_nodedef->get(node_under.getContent()).pointable != PointabilityType::POINTABLE) {
+				infostream << "Player" << player->getName()
+					<< " tried to place a node on unpointable node at "
+					<< pointed.node_undersurface << "; ignoring." << std::endl;
+				// Note: It is possible that this happens due to lag.
+				m_script->on_cheat(playersao, "likely_placed_on_unpointable_node");
+			} else if (m_script->item_OnPlace(selected_item, playersao, pointed)) {
+				// Placement was handled in lua
+
+				// Apply returned ItemStack
+				if (selected_item.has_value() && playersao->setWieldedItem(*selected_item))
+					SendInventory(player, true);
+			}
+
+			// If item has node placement prediction, always send the
+			// blocks to make sure the client knows what exactly happened
+			RemoteClient *client = getClient(peer_id);
+			v3s16 blockpos = getNodeBlockPos(pointed.node_abovesurface);
+			v3s16 blockpos2 = getNodeBlockPos(pointed.node_undersurface);
+			if (had_prediction) {
+				client->SetBlockNotSent(blockpos);
+				if (blockpos2 != blockpos)
+					client->SetBlockNotSent(blockpos2);
+			} else {
+				client->ResendBlockIfOnWire(blockpos);
+				if (blockpos2 != blockpos)
+					client->ResendBlockIfOnWire(blockpos2);
+			}
 		}
 
 		return;
