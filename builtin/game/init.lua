@@ -17,6 +17,7 @@ if core.settings:get_bool("profiler.load") then
 	profiler = dofile(scriptpath .. "profiler" .. DIR_DELIM .. "init.lua")
 end
 
+dofile(commonpath .. "require.lua")
 dofile(commonpath .. "after.lua")
 dofile(commonpath .. "metatable.lua")
 dofile(commonpath .. "mod_storage.lua")

@@ -5,6 +5,7 @@ local epath = core.get_builtin_path() .. "emerge" .. DIR_DELIM
 local builtin_shared = {}
 
 -- Import parts shared with "game" environment
+dofile(commonpath .. "require.lua")
 dofile(gamepath .. "constants.lua")
 assert(loadfile(commonpath .. "item_s.lua"))(builtin_shared)
 dofile(gamepath .. "misc_s.lua")

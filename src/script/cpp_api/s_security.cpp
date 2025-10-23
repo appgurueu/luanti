@@ -9,6 +9,7 @@
 #include "util/hex.h"
 #include "builtin_files.h"
 #include "server.h"
+#include <lua.h>
 #if CHECK_CLIENT_BUILD()
 #include "client/client.h"
 #include "client/mod_vfs.h"
@@ -185,6 +186,8 @@ void ScriptApiSecurity::initializeSecurity()
 		"debug",
 	};
 	static const char *package_whitelist[] = {
+		// These are safe, but also fairly useless as due to mod security,
+		// require must be overridden to only load from mod paths.
 		"config",
 		"cpath",
 		"path",
@@ -311,7 +314,15 @@ void ScriptApiSecurity::initializeSecurity()
 	// Copy safe package fields
 	lua_getfield(L, old_globals, "package");
 	lua_newtable(L);
+	int package = lua_gettop(L);
 	copy_safe(L, package_whitelist, sizeof(package_whitelist));
+	lua_newtable(L);
+	lua_setfield(L, package, "loaded");
+	lua_newtable(L);
+	lua_setfield(L, package, "preload");
+	// Important: No loaders by default! Builtin sets up a safe pure Lua loader later.
+	lua_newtable(L);
+	lua_setfield(L, package, "loaders");
 	lua_setglobal(L, "package");
 	lua_pop(L, 1);  // Pop old package
 
