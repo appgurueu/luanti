@@ -12,6 +12,7 @@
 #include "filesys.h"
 #include "porting.h"
 #include "server.h"
+#include <lua.h>
 #if CHECK_CLIENT_BUILD()
 #include "client/client.h"
 #include "client/mod_vfs.h"
@@ -246,38 +247,85 @@ std::string ScriptApiBase::getCurrentModNameInsecure(lua_State *L)
 	return ret;
 }
 
-void ScriptApiBase::loadMod(const std::string &script_path,
-		const std::string &mod_name)
-{
-	ModNameStorer mod_name_storer(getStack(), mod_name);
-
-	loadScript(script_path);
-}
-
-void ScriptApiBase::loadScript(const std::string &script_path)
+static void load_script(lua_State *L, const char *script_path, int nresults)
 {
 	verbosestream << "Loading and running script from " << script_path << std::endl;
-
-	lua_State *L = getStack();
 
 	int error_handler = PUSH_ERROR_HANDLER(L);
 
 	bool ok;
 	if (ScriptApiSecurity::isSecure(L)) {
-		ok = ScriptApiSecurity::safeLoadFile(L, script_path.c_str());
+		ok = ScriptApiSecurity::safeLoadFile(L, script_path);
 	} else {
-		ok = !luaL_loadfile(L, script_path.c_str());
+		ok = !luaL_loadfile(L, script_path);
 	}
-	ok = ok && !lua_pcall(L, 0, 0, error_handler);
+	ok = ok && !lua_pcall(L, 0, nresults, error_handler);
 	if (!ok) {
 		const char *error_msg = lua_tostring(L, -1);
 		if (!error_msg)
 			error_msg = "(error object is not a string)";
 		lua_pop(L, 2); // Pop error message and error handler
-		throw ModError("Failed to load and run script from " +
+		throw ModError(std::string("Failed to load and run script from ") +
 				script_path + ":\n" + error_msg);
 	}
-	lua_pop(L, 1); // Pop error handler
+	lua_remove(L, error_handler);
+	// leave the return values from loading the file on the stack
+}
+
+void ScriptApiBase::requireMod(const std::string &mod_name)
+{
+	lua_State *L = getStack();
+	int top = lua_gettop(L);
+	ModNameStorer mod_name_storer(L, mod_name);
+
+	lua_getglobal(L, "require");
+	lua_pushstring(L, mod_name.c_str());
+	if (lua_pcall(L, 1, 1, 0) != 0) {
+		const char *error_msg = lua_tostring(L, -1);
+		if (!error_msg)
+			error_msg = "(error object is not a string)";
+		lua_pop(L, 1); // Pop error message
+		throw ModError("Failed to require mod \"" +
+				mod_name + "\":\n" + error_msg);
+	}
+	lua_settop(L, top);
+}
+
+void ScriptApiBase::loadMod(const std::string &script_path,
+		const std::string &mod_name, bool use_pkg_loaded)
+{
+	lua_State *L = getStack();
+	int top = lua_gettop(L);
+	ModNameStorer mod_name_storer(L, mod_name);
+
+	if (use_pkg_loaded) {
+		lua_getglobal(L, "package");
+		lua_getfield(L, -1, "loaded");
+		lua_getfield(L, -1, mod_name.c_str());
+		if (!lua_isnil(L, -1)) {
+			lua_settop(L, top);
+			return;
+		}
+	}
+
+	load_script(L, script_path.c_str(), 1);
+	if (use_pkg_loaded) {
+		if (lua_isnil(L, -1)) {
+			lua_pop(L, 1);
+			lua_pushboolean(L, true);
+		}
+		int mod = lua_gettop(L);
+		lua_getglobal(L, "package");
+		lua_getfield(L, -1, "loaded");
+		lua_pushvalue(L, mod);
+		lua_setfield(L, -2, mod_name.c_str());
+	}
+	lua_settop(L, top);
+}
+
+void ScriptApiBase::loadScript(const std::string &script_path)
+{
+	load_script(getStack(), script_path.c_str(), 0);
 }
 
 #if CHECK_CLIENT_BUILD()
