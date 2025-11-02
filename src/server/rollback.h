@@ -4,6 +4,7 @@
 
 #pragma once
 
+#include <deque>
 #include <string>
 #include "irr_v3d.h"
 #include "rollback_interface.h"
@@ -68,7 +69,10 @@ private:
 	bool current_actor_is_guess = false;
 
 	std::list<RollbackAction> action_todisk_buffer;
-	std::list<RollbackAction> action_latest_buffer;
+	std::deque<RollbackAction> action_latest_buffer;
+
+	/// This many seconds of latest actions are kept in memory for suspect searching
+	static constexpr time_t LATEST_SECONDS = 100;
 
 	std::string database_path;
 	sqlite3 * db;

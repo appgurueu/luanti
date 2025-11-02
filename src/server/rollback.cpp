@@ -730,29 +730,28 @@ std::string RollbackManager::getSuspect(v3s16 p, float nearness_shortcut,
 	if (!current_actor.empty()) {
 		return current_actor;
 	}
-	int cur_time = time(0);
-	time_t first_time = cur_time - (100 - min_nearness);
+	time_t cur_time = time(0);
+	time_t first_time = cur_time - (LATEST_SECONDS - min_nearness);
 	RollbackAction likely_suspect;
 	float likely_suspect_nearness = 0;
-	for (std::list<RollbackAction>::const_reverse_iterator
-	     i = action_latest_buffer.rbegin();
-	     i != action_latest_buffer.rend(); ++i) {
-		if (i->unix_time < first_time) {
+	for (auto it = action_latest_buffer.rbegin();
+	    	it != action_latest_buffer.rend(); ++it) {
+		if (it->unix_time < first_time) {
 			break;
 		}
-		if (i->actor.empty()) {
+		if (it->actor.empty()) {
 			continue;
 		}
 		// Find position of suspect or continue
 		v3s16 suspect_p;
-		if (!i->getPosition(&suspect_p)) {
+		if (!it->getPosition(&suspect_p)) {
 			continue;
 		}
-		float f = getSuspectNearness(i->actor_is_guess, suspect_p,
-					     i->unix_time, p, cur_time);
+		float f = getSuspectNearness(it->actor_is_guess, suspect_p,
+					     it->unix_time, p, cur_time);
 		if (f >= min_nearness && f > likely_suspect_nearness) {
 			likely_suspect_nearness = f;
-			likely_suspect = *i;
+			likely_suspect = *it;
 			if (likely_suspect_nearness >= nearness_shortcut) {
 				break;
 			}
@@ -783,6 +782,12 @@ void RollbackManager::flush()
 
 	sqlite3_exec(db, "COMMIT", NULL, NULL, NULL);
 	action_todisk_buffer.clear();
+	time_t cur_time = time(0);
+	while (!action_latest_buffer.empty() &&
+			action_latest_buffer.front().unix_time + LATEST_SECONDS < cur_time)
+	{
+		action_latest_buffer.pop_front();
+	}
 }
 
 
