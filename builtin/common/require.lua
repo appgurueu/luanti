@@ -1,5 +1,3 @@
-assert(package.loaders[1] == nil)
-
 local function wrapped_loadfile(filepath)
 	local loader, err = loadfile(filepath)
 	if not loader then
@@ -17,7 +15,8 @@ local function file_is_readable(filepath)
 	return false
 end
 
-package.loaders[1] = function(path_str)
+-- If mod security is disabled, our loader should be first in line.
+table.insert(package.loaders, 1, function(path_str)
 	local path = path_str:split(".")
 	local modname = path[1]
 	if package.loaded[modname] == nil then
@@ -34,4 +33,4 @@ package.loaders[1] = function(path_str)
 		return wrapped_loadfile(stem .. ".lua")
 	end
 	return wrapped_loadfile(stem .. "/init.lua")
-end
+end)
