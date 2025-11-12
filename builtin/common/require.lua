@@ -20,13 +20,15 @@ end
 package.loaders[1] = function(path_str)
 	local path = path_str:split(".")
 	local modname = path[1]
+	if package.loaded[modname] == nil then
+		return "Mod " .. modname .. " not loaded. Depend on it in `mod.conf`."
+	end
+
 	local modpath = core.get_modpath(modname)
 	if not modpath then
-		return "Mod not found: "..modname
+		return "Mod not found: " .. modname
 	end
-	if #path == 1 then
-		return wrapped_loadfile(modpath .. "/init.lua")
-	end
+
 	local stem = modpath .. table.concat(path, "/", 2)
 	if file_is_readable(stem .. ".lua") then
 		return wrapped_loadfile(stem .. ".lua")

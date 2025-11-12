@@ -12,7 +12,6 @@
 #include "filesys.h"
 #include "porting.h"
 #include "server.h"
-#include <lua.h>
 #if CHECK_CLIENT_BUILD()
 #include "client/client.h"
 #include "client/mod_vfs.h"
@@ -272,41 +271,12 @@ static void load_script(lua_State *L, const char *script_path, int nresults)
 	// leave the return values from loading the file on the stack
 }
 
-void ScriptApiBase::requireMod(const std::string &mod_name)
-{
-	lua_State *L = getStack();
-	int top = lua_gettop(L);
-	ModNameStorer mod_name_storer(L, mod_name);
-
-	lua_getglobal(L, "require");
-	lua_pushstring(L, mod_name.c_str());
-	if (lua_pcall(L, 1, 1, 0) != 0) {
-		const char *error_msg = lua_tostring(L, -1);
-		if (!error_msg)
-			error_msg = "(error object is not a string)";
-		lua_pop(L, 1); // Pop error message
-		throw ModError("Failed to require mod \"" +
-				mod_name + "\":\n" + error_msg);
-	}
-	lua_settop(L, top);
-}
-
 void ScriptApiBase::loadMod(const std::string &script_path,
 		const std::string &mod_name, bool use_pkg_loaded)
 {
 	lua_State *L = getStack();
 	int top = lua_gettop(L);
 	ModNameStorer mod_name_storer(L, mod_name);
-
-	if (use_pkg_loaded) {
-		lua_getglobal(L, "package");
-		lua_getfield(L, -1, "loaded");
-		lua_getfield(L, -1, mod_name.c_str());
-		if (!lua_isnil(L, -1)) {
-			lua_settop(L, top);
-			return;
-		}
-	}
 
 	load_script(L, script_path.c_str(), 1);
 	if (use_pkg_loaded) {

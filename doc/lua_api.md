@@ -365,6 +365,22 @@ The main Lua script. Running this script should register everything it
 wants to register. Subsequent execution depends on Luanti calling the
 registered callbacks.
 
+#### `require`
+
+Luanti versions prior to 5.15 disabled `require` for security reasons.
+This means you need to manually use `dofile` to load additional files.
+
+As of version 5.15+, Luanti supports a version of `require` with a custom loader
+that is incapable of loading dynamically linked libraries.
+Given a call `require("mod.submodule")`, this loader looks for `<mod_path>/submodule.lua`
+and `<mod_path>/submodule/init.lua`, in that order.
+
+`require("mod")` returns the return value of the mod's `init.lua`.
+You should only `require` mods you depend on (optionally or mandatorily) in your `mod.conf`.
+
+The `package.loaded`, `package.loaders` and `package.preload` tables all work as expected,
+with the exception that they have no impact on how a mod's `init.lua` is loaded at the moment.
+
 ### `textures`, `sounds`, `media`, `models`, `locale`, `fonts`
 
 Media files (textures, sounds, whatever) that will be transferred to the

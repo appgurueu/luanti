@@ -9,7 +9,6 @@
 #include "util/hex.h"
 #include "builtin_files.h"
 #include "server.h"
-#include <lua.h>
 #if CHECK_CLIENT_BUILD()
 #include "client/client.h"
 #include "client/mod_vfs.h"
