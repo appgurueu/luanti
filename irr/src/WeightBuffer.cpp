@@ -2,6 +2,7 @@
 // For conditions of distribution and use, see copyright notice in irrlicht.h
 
 #include "WeightBuffer.h"
+#include "vector3d.h"
 
 #include <algorithm>
 #include <numeric>
@@ -61,16 +62,23 @@ void WeightBuffer::skin(IVertexBuffer *dst,
 		const std::vector<core::matrix4> &joint_transforms) const
 {
 	assert(animated_vertices.has_value());
+	bool dirty = false;
 	for (u32 i = 0; i < animated_vertices->size(); ++i) {
-
 		u32 vertex_id = (*animated_vertices)[i];
 		auto pos = static_positions[i];
 		auto normal = static_normals[i];
 		skinVertex(vertex_id, pos, normal, joint_transforms);
-		dst->getPosition(vertex_id) = pos;
-		dst->getNormal(vertex_id) = normal;
+		auto update = [&dirty](core::vector3df &dst, core::vector3df src) {
+			if (dst != src) {
+				dst = src;
+				// Only mark as dirty if actually changed: Reupload may be expensive.
+				dirty = true;
+			}
+		};
+		update(dst->getPosition(vertex_id), pos);
+		update(dst->getNormal(vertex_id), normal);
 	}
-	if (!animated_vertices->empty())
+	if (dirty)
 		dst->setDirty();
 }
 
