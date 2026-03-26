@@ -179,15 +179,8 @@ bool CXMeshFileLoader::load(io::IReadFile *file)
 				if (verticesLinkBuffer[i] != -1)
 					++vCountArray[verticesLinkBuffer[i]];
 			}
-			if (mesh->TCoords2.size()) {
-				for (i = 0; i != mesh->Buffers.size(); ++i) {
-					mesh->Buffers[i]->Vertices_2TCoords->Data.reserve(vCountArray[i]);
-					mesh->Buffers[i]->VertexType = video::EVT_2TCOORDS;
-				}
-			} else {
-				for (i = 0; i != mesh->Buffers.size(); ++i)
-					mesh->Buffers[i]->Vertices_Standard->Data.reserve(vCountArray[i]);
-			}
+			for (i = 0; i != mesh->Buffers.size(); ++i)
+				mesh->Buffers[i]->Vertices->Data.reserve(vCountArray[i]);
 
 			verticesLinkIndex.set_used(mesh->Vertices.size());
 			// actually store vertices
@@ -197,16 +190,9 @@ bool CXMeshFileLoader::load(io::IReadFile *file)
 					continue;
 				scene::SSkinMeshBuffer *buffer = mesh->Buffers[verticesLinkBuffer[i]];
 
-				if (mesh->TCoords2.size()) {
-					verticesLinkIndex[i] = buffer->Vertices_2TCoords->getCount();
-					buffer->Vertices_2TCoords->Data.emplace_back(mesh->Vertices[i]);
-					// We have a problem with correct tcoord2 handling here
-					// crash fixed for now by checking the values
-					buffer->Vertices_2TCoords->Data.back().TCoords2 = (i < mesh->TCoords2.size()) ? mesh->TCoords2[i] : mesh->Vertices[i].TCoords;
-				} else {
-					verticesLinkIndex[i] = buffer->Vertices_Standard->getCount();
-					buffer->Vertices_Standard->Data.push_back(mesh->Vertices[i]);
-				}
+				// Note: mesh->TCoords2 is ignored here.
+				verticesLinkIndex[i] = buffer->Vertices->getCount();
+				buffer->Vertices->Data.push_back(mesh->Vertices[i]);
 			}
 
 			// count indices per buffer and reallocate

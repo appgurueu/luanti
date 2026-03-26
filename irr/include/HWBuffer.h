@@ -13,6 +13,7 @@ struct HWBuffer : public virtual IReferenceCounted {
 		VERTEX,
 		INDEX,
 		WEIGHT,
+		TANGENT,
 	};
 	/// Type of the buffer for faster type checks than dynamic_cast
 	virtual Type getBufferType() const = 0;

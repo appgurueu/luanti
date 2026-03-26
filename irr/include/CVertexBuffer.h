@@ -4,88 +4,70 @@
 
 #pragma once
 
-#include <memory>
 #include <vector>
 #include "EHardwareBufferFlags.h"
 #include "HWBuffer.h"
 #include "IVertexBuffer.h"
+#include "S3DVertex.h"
 #include "WeightBuffer.h"
 #include "irr_ptr.h"
+#include "vector3d.h"
 
 namespace scene
 {
 
-//! Template implementation of the IVertexBuffer interface
-template <class T>
 struct CVertexBuffer final : public IVertexBuffer
 {
 	//! Default constructor for empty buffer
 	CVertexBuffer() {}
 
 	HWBuffer::Type getBufferType() const override
-	{
-		return HWBuffer::Type::VERTEX;
-	}
-
-	const void *getData() const override
-	{
-		return Data.data();
-	}
-
-	void *getData() override
-	{
-		return Data.data();
-	}
-
-	u32 getCount() const override
-	{
-		return static_cast<u32>(Data.size());
-	}
-
-	video::E_VERTEX_TYPE getType() const override
-	{
-		return T::getType();
-	}
+	{ return HWBuffer::Type::VERTEX; }
 
 	u32 getElementSize() const override
-	{
-		return sizeof(T);
-	}
+	{ return sizeof(video::S3DVertex); }
+
+	const void *getData() const override
+	{ return Data.data(); }
+
+	void *getData() override
+	{ return Data.data(); }
+
+	u32 getCount() const override
+	{ return static_cast<u32>(Data.size()); }
+
+	const video::S3DVertex *getVertices() const override
+	{ return Data.data(); }
+
+	video::S3DVertex *getVertices() override
+	{ return Data.data(); }
 
 	const core::vector3df &getPosition(u32 i) const override
-	{
-		return Data[i].Pos;
-	}
+	{ return Data[i].Pos; }
 
 	core::vector3df &getPosition(u32 i) override
-	{
-		return Data[i].Pos;
-	}
+	{ return Data[i].Pos; }
 
 	const core::vector3df &getNormal(u32 i) const override
-	{
-		return Data[i].Normal;
-	}
+	{ return Data[i].Normal; }
 
 	core::vector3df &getNormal(u32 i) override
-	{
-		return Data[i].Normal;
-	}
+	{ return Data[i].Normal; }
 
 	const core::vector2df &getTCoords(u32 i) const override
-	{
-		return Data[i].TCoords;
-	}
+	{ return Data[i].TCoords; }
 
 	core::vector2df &getTCoords(u32 i) override
-	{
-		return Data[i].TCoords;
-	}
+	{ return Data[i].TCoords; }
 
 	const WeightBuffer *getWeightBuffer() const override
-	{
-		return UseSwSkinning ? nullptr : Weights.get();
-	}
+	{ return UseSwSkinning ? nullptr : Weights.get(); }
+
+	const TangentBuffer *getTangentBuffer() const override
+	{ return Tangents.get(); }
+
+	TangentBuffer *getTangentBuffer() override
+	{ return Tangents.get(); }
 
 	void useSwSkinning() override
 	{
@@ -97,18 +79,16 @@ struct CVertexBuffer final : public IVertexBuffer
 	}
 
 	//! Vertices of this buffer
-	std::vector<T> Data;
+	std::vector<video::S3DVertex> Data;
 
 	//! Optional weights for skinning
 	irr_ptr<WeightBuffer> Weights;
+	//! Optional tangents
+	irr_ptr<TangentBuffer> Tangents;
+
 	bool UseSwSkinning = false;
 };
 
-//! Standard buffer
-typedef CVertexBuffer<video::S3DVertex> SVertexBuffer;
-//! Buffer with two texture coords per vertex, e.g. for lightmaps
-typedef CVertexBuffer<video::S3DVertex2TCoords> SVertexBufferLightMap;
-//! Buffer with vertices having tangents stored, e.g. for normal mapping
-typedef CVertexBuffer<video::S3DVertexTangents> SVertexBufferTangents;
+using SVertexBuffer = CVertexBuffer; // TODO rename
 
 } // end namespace scene

@@ -10,6 +10,7 @@
 
 #include "IVideoDriver.h"
 #include "IFileSystem.h"
+#include "S3DVertex.h"
 #include "SkinnedMesh.h"
 #include "coreutil.h"
 #include "os.h"
@@ -364,17 +365,13 @@ bool CB3DMeshFileLoader::readChunkVRTS(SkinnedMesh::SJoint *inJoint)
 			tv = tex_coords[0][1];
 		}
 
-		f32 tu2 = 0.0f, tv2 = 0.0f;
-		if (tex_coord_sets > 1 && tex_coord_set_size > 1) {
-			tu2 = tex_coords[1][0];
-			tv2 = tex_coords[1][1];
-		}
+		// Note: Only the first tex coord set is used, the rest are ignored.
 
 		// Create Vertex...
-		video::S3DVertex2TCoords Vertex(position[0], position[1], position[2],
+		video::S3DVertex Vertex(position[0], position[1], position[2],
 				normal[0], normal[1], normal[2],
 				video::SColorf(color[0], color[1], color[2], color[3]).toSColor(),
-				tu, tv, tu2, tv2);
+				tu, tv);
 
 		// Transform the Vertex position by nested node...
 		inJoint->GlobalMatrix.transformVect(Vertex.Pos);
@@ -456,15 +453,8 @@ bool CB3DMeshFileLoader::readChunkTRIS(scene::SSkinMeshBuffer *meshBuffer, u32 m
 				}
 			}
 			if (AnimatedVertices_VertexID[vertex_id[i]] == -1) { // If this vertex is not in the meshbuffer
-				// Check for lightmapping:
-				if (BaseVertices[vertex_id[i]].TCoords2 != core::vector2df(0.f, 0.f))
-					meshBuffer->convertTo2TCoords(); // Will only affect the meshbuffer the first time this is called
-
 				// Add the vertex to the meshbuffer:
-				if (meshBuffer->VertexType == video::EVT_STANDARD)
-					meshBuffer->Vertices_Standard->Data.push_back(BaseVertices[vertex_id[i]]);
-				else
-					meshBuffer->Vertices_2TCoords->Data.push_back(BaseVertices[vertex_id[i]]);
+				meshBuffer->Vertices->Data.push_back(BaseVertices[vertex_id[i]]);
 
 				// create vertex id to meshbuffer index link:
 				AnimatedVertices_VertexID[vertex_id[i]] = meshBuffer->getVertexCount() - 1;

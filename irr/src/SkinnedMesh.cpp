@@ -501,7 +501,9 @@ void SkinnedMeshBuilder::addWeight(SJoint *joint, u16 buf_id, u32 vert_id, f32 s
 
 void SkinnedMesh::convertMeshToTangents()
 {
+	// TODO
 	// now calculate tangents
+	/*
 	for (u32 b = 0; b < LocalBuffers.size(); ++b) {
 		if (LocalBuffers[b]) {
 			LocalBuffers[b]->convertToTangents();
@@ -548,6 +550,7 @@ void SkinnedMesh::convertMeshToTangents()
 			}
 		}
 	}
+	*/
 }
 
 void SkinnedMesh::calculateTangents(

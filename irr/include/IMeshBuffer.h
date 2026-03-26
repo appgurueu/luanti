@@ -5,6 +5,7 @@
 #pragma once
 
 #include "IReferenceCounted.h"
+#include "S3DVertex.h"
 #include "SMaterial.h"
 #include "aabbox3d.h"
 #include "IVertexBuffer.h"
@@ -70,36 +71,30 @@ public:
 	virtual void recalculateBoundingBox() = 0;
 
 	//! Append the vertices and indices to the current buffer
+	//! @note does not populate any non-base attributes (e.g. tangents)
 	/** Only works for compatible vertex types.
 	\param vertices Pointer to a vertex array.
 	\param numVertices Number of vertices in the array.
 	\param indices Pointer to index array.
 	\param numIndices Number of indices in array. */
-	virtual void append(const void *const vertices, u32 numVertices, const u16 *const indices, u32 numIndices) = 0;
+	virtual void append(const video::S3DVertex *const vertices, u32 numVertices, const u16 *const indices, u32 numIndices) = 0;
 
 	/* Leftover functions that are now just helpers for accessing the respective buffer. */
 
-	//! Get type of vertex data which is stored in this meshbuffer.
-	/** \return Vertex type of this buffer. */
-	inline video::E_VERTEX_TYPE getVertexType() const
+	//! Get access to vertex data. The data is an array of vertices.
+	/** Which vertex type is used can be determined by getVertexType().
+	\return Pointer to array of vertices. */
+	inline const video::S3DVertex *getVertices() const
 	{
-		return getVertexBuffer()->getType();
+		return getVertexBuffer()->getVertices();
 	}
 
 	//! Get access to vertex data. The data is an array of vertices.
 	/** Which vertex type is used can be determined by getVertexType().
 	\return Pointer to array of vertices. */
-	inline const void *getVertices() const
+	inline video::S3DVertex *getVertices()
 	{
-		return getVertexBuffer()->getData();
-	}
-
-	//! Get access to vertex data. The data is an array of vertices.
-	/** Which vertex type is used can be determined by getVertexType().
-	\return Pointer to array of vertices. */
-	inline void *getVertices()
-	{
-		return getVertexBuffer()->getData();
+		return getVertexBuffer()->getVertices();
 	}
 
 	//! Get amount of vertices in meshbuffer.
@@ -214,18 +209,7 @@ public:
 	//! Calculate size of vertices and indices in memory
 	size_t getSize() const
 	{
-		size_t ret = 0;
-		switch (getVertexType()) {
-			case video::EVT_STANDARD:
-				ret += sizeof(video::S3DVertex) * getVertexCount();
-				break;
-			case video::EVT_2TCOORDS:
-				ret += sizeof(video::S3DVertex2TCoords) * getVertexCount();
-				break;
-			case video::EVT_TANGENTS:
-				ret += sizeof(video::S3DVertexTangents) * getVertexCount();
-				break;
-		}
+		size_t ret = sizeof(video::S3DVertex) * getVertexCount();
 		switch (getIndexType()) {
 			case video::EIT_16BIT:
 				ret += sizeof(u16) * getIndexCount();

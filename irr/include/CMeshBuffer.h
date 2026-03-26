@@ -5,30 +5,21 @@
 #pragma once
 
 #include <vector>
+#include "EPrimitiveTypes.h"
 #include "IMeshBuffer.h"
 #include "CVertexBuffer.h"
 #include "CIndexBuffer.h"
+#include "S3DVertex.h"
 
 namespace scene
 {
-//! Template implementation of the IMeshBuffer interface
-template <class T>
+
 class CMeshBuffer final : public IMeshBuffer
 {
 public:
 	//! Default constructor for empty meshbuffer
-	CMeshBuffer() :
-			PrimitiveType(EPT_TRIANGLES)
-	{
-		Vertices = new CVertexBuffer<T>();
-		Indices = new SIndexBuffer();
-	}
-
-	~CMeshBuffer()
-	{
-		Vertices->drop();
-		Indices->drop();
-	}
+	CMeshBuffer() : Vertices(new SVertexBuffer()), Indices(new SIndexBuffer())
+	{}
 
 	//! Get material of this meshbuffer
 	/** \return Material of this buffer */
@@ -46,22 +37,22 @@ public:
 
 	const scene::IVertexBuffer *getVertexBuffer() const override
 	{
-		return Vertices;
+		return Vertices.get();
 	}
 
 	scene::IVertexBuffer *getVertexBuffer() override
 	{
-		return Vertices;
+		return Vertices.get();
 	}
 
 	const scene::IIndexBuffer *getIndexBuffer() const override
 	{
-		return Indices;
+		return Indices.get();
 	}
 
 	scene::IIndexBuffer *getIndexBuffer() override
 	{
-		return Indices;
+		return Indices.get();
 	}
 
 	//! Get the axis aligned bounding box
@@ -93,7 +84,7 @@ public:
 	}
 
 	//! Append the vertices and indices to the current buffer
-	void append(const void *const vertices, u32 numVertices, const u16 *const indices, u32 numIndices) override
+	void append(const video::S3DVertex *const vertices, u32 numVertices, const u16 *const indices, u32 numIndices) override
 	{
 		if (vertices == getVertices())
 			return;
@@ -101,8 +92,7 @@ public:
 		const u32 vertexCount = getVertexCount();
 		const u32 indexCount = getIndexCount();
 
-		auto *vt = static_cast<const T *>(vertices);
-		Vertices->Data.insert(Vertices->Data.end(), vt, vt + numVertices);
+		Vertices->Data.insert(Vertices->Data.end(), vertices, vertices + numVertices);
 		for (u32 i = vertexCount; i < getVertexCount(); i++)
 			BoundingBox.addInternalPoint(Vertices->getPosition(i));
 
@@ -128,19 +118,14 @@ public:
 	//! Material for this meshbuffer.
 	video::SMaterial Material;
 	//! Vertex buffer
-	CVertexBuffer<T> *Vertices;
+	irr_ptr<SVertexBuffer> Vertices;
 	//! Index buffer
-	SIndexBuffer *Indices;
+	irr_ptr<SIndexBuffer> Indices;
 	//! Bounding box of this meshbuffer.
 	core::aabbox3d<f32> BoundingBox{{0, 0, 0}};
 	//! Primitive type used for rendering (triangles, lines, ...)
-	E_PRIMITIVE_TYPE PrimitiveType;
+	E_PRIMITIVE_TYPE PrimitiveType = EPT_TRIANGLES;
 };
 
-//! Standard meshbuffer
-typedef CMeshBuffer<video::S3DVertex> SMeshBuffer;
-//! Meshbuffer with two texture coords per vertex, e.g. for lightmaps
-typedef CMeshBuffer<video::S3DVertex2TCoords> SMeshBufferLightMap;
-//! Meshbuffer with vertices having tangents stored, e.g. for normal mapping
-typedef CMeshBuffer<video::S3DVertexTangents> SMeshBufferTangents;
+using SMeshBuffer = CMeshBuffer; // TODO rename
 } // end namespace scene

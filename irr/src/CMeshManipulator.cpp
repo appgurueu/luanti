@@ -6,7 +6,6 @@
 #include "SkinnedMesh.h"
 #include "SMesh.h"
 #include "CMeshBuffer.h"
-#include "os.h"
 
 #include <cassert>
 
@@ -114,27 +113,12 @@ void CMeshManipulator::recalculateNormals(scene::IMesh *mesh, bool smooth, bool 
 	}
 }
 
-template <typename T>
-void copyVertices(const scene::IVertexBuffer *src, scene::CVertexBuffer<T> *dst)
-{
-	assert(T::getType() == src->getType());
-	auto *data = static_cast<const T*>(src->getData());
-	dst->Data.assign(data, data + src->getCount());
-}
-
-static void copyIndices(const scene::IIndexBuffer *src, scene::SIndexBuffer *dst)
-{
-	assert(src->getType() == video::EIT_16BIT);
-	auto *data = static_cast<const u16*>(src->getData());
-	dst->Data.assign(data, data + src->getCount());
-}
-
-//! Clones a static IMesh into a modifyable SMesh.
+//! Clones a static IMesh into a modifiable SMesh.
 // not yet 32bit
 SMesh *CMeshManipulator::createMeshCopy(scene::IMesh *mesh) const
 {
 	if (!mesh)
-		return 0;
+		return nullptr;
 
 	SMesh *clone = new SMesh();
 
@@ -142,34 +126,17 @@ SMesh *CMeshManipulator::createMeshCopy(scene::IMesh *mesh) const
 
 	for (u32 b = 0; b < meshBufferCount; ++b) {
 		const IMeshBuffer *const mb = mesh->getMeshBuffer(b);
-		switch (mb->getVertexType()) {
-		case video::EVT_STANDARD: {
-			SMeshBuffer *buffer = new SMeshBuffer();
-			buffer->Material = mb->getMaterial();
-			copyVertices(mb->getVertexBuffer(), buffer->Vertices);
-			copyIndices(mb->getIndexBuffer(), buffer->Indices);
-			clone->addMeshBuffer(buffer);
-			buffer->drop();
-		} break;
-		case video::EVT_2TCOORDS: {
-			SMeshBufferLightMap *buffer = new SMeshBufferLightMap();
-			buffer->Material = mb->getMaterial();
-			copyVertices(mb->getVertexBuffer(), buffer->Vertices);
-			copyIndices(mb->getIndexBuffer(), buffer->Indices);
-			clone->addMeshBuffer(buffer);
-			buffer->drop();
-		} break;
-		case video::EVT_TANGENTS: {
-			SMeshBufferTangents *buffer = new SMeshBufferTangents();
-			buffer->Material = mb->getMaterial();
-			copyVertices(mb->getVertexBuffer(), buffer->Vertices);
-			copyIndices(mb->getIndexBuffer(), buffer->Indices);
-			clone->addMeshBuffer(buffer);
-			buffer->drop();
-		} break;
-		} // end switch
-
-	} // end for all mesh buffers
+		SMeshBuffer *buffer = new SMeshBuffer();
+		buffer->Material = mb->getMaterial();
+		const auto *vbuf = mb->getVertexBuffer();
+		const auto *verts = vbuf->getVertices();
+		buffer->Vertices->Data.assign(verts, verts + vbuf->getCount());
+		const auto *ibuf = mb->getIndexBuffer();
+		const u16 *idxs = static_cast<const u16 *>(ibuf->getData());
+		buffer->Indices->Data.assign(idxs, idxs + ibuf->getCount());
+		clone->addMeshBuffer(buffer);
+		buffer->drop();
+	}
 
 	clone->BoundingBox = mesh->getBoundingBox();
 	return clone;

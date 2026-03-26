@@ -72,7 +72,7 @@ void PostProcessingStep::run(PipelineContext &context)
 	};
 	static const u16 indices[6] = {0, 1, 2, 2, 3, 0};
 	driver->setMaterial(material);
-	driver->drawVertexPrimitiveList(&vertices, 4, &indices, 2);
+	driver->drawVertexPrimitiveList(vertices, 4, indices, 2);
 }
 
 void PostProcessingStep::setBilinearFilter(u8 index, bool value)

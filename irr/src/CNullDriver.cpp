@@ -6,6 +6,7 @@
 #include "IIndexBuffer.h"
 #include "IVertexBuffer.h"
 #include "IVideoDriver.h"
+#include "S3DVertex.h"
 #include "SMaterial.h"
 #include "os.h"
 #include "CImage.h"
@@ -564,16 +565,7 @@ const core::rect<s32> &CNullDriver::getViewPort() const
 }
 
 //! draws a vertex primitive list
-void CNullDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCount, const void *indexList, u32 primitiveCount, E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
-{
-	if ((iType == EIT_16BIT) && (vertexCount > 65536))
-		os::Printer::log("Too many vertices for 16bit index type, render artifacts may occur.");
-	FrameStats.Drawcalls++;
-	FrameStats.PrimitivesDrawn += primitiveCount;
-}
-
-//! draws a vertex primitive list in 2d
-void CNullDriver::draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount, const void *indexList, u32 primitiveCount, E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
+void CNullDriver::drawVertexPrimitiveList(const S3DVertex *vertices, u32 vertexCount, const void *indexList, u32 primitiveCount, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
 {
 	if ((iType == EIT_16BIT) && (vertexCount > 65536))
 		os::Printer::log("Too many vertices for 16bit index type, render artifacts may occur.");
@@ -603,7 +595,7 @@ void CNullDriver::draw3DBox(const core::aabbox3d<f32> &box, SColor color)
 		5, 1, 1, 3, 3, 7, 7, 5, 0, 2, 2, 6, 6, 4, 4, 0, 1, 0, 3, 2, 7, 6, 5, 4
 	};
 
-	drawVertexPrimitiveList(v, 8, box_indices, 12, EVT_STANDARD, scene::EPT_LINES);
+	drawVertexPrimitiveList(v, 8, box_indices, 12, scene::EPT_LINES);
 }
 
 //! draws an 2d image
@@ -948,8 +940,8 @@ void CNullDriver::drawBuffers(const scene::IVertexBuffer *vb,
 	// subclass is supposed to override this if it supports hw buffers
 	assert(!vb->Link && !ib->Link);
 
-	drawVertexPrimitiveList(vb->getData(), vb->getCount(), ib->getData(),
-		primCount, vb->getType(), pType, ib->getType());
+	drawVertexPrimitiveList(vb->getVertices(), vb->getCount(), ib->getData(),
+		primCount, pType, ib->getType());
 }
 
 //! Draws the normals of a mesh buffer

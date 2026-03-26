@@ -149,8 +149,7 @@ void COpenGLSLMaterialRenderer::init(s32 &outMaterialTypeNr,
 	outMaterialTypeNr = Driver->addMaterialRenderer(this);
 }
 
-bool COpenGLSLMaterialRenderer::OnRender(IMaterialRendererServices *service,
-		E_VERTEX_TYPE vtxtype)
+bool COpenGLSLMaterialRenderer::OnRender(IMaterialRendererServices *service)
 {
 	// call callback to set shader constants
 	if (CallBack && Program2)

@@ -10,6 +10,7 @@
 
 #include "IMeshLoader.h"
 #include "ISceneManager.h"
+#include "S3DVertex.h"
 #include "SkinnedMesh.h"
 #include "SB3DStructs.h"
 #include "IReadFile.h"
@@ -58,7 +59,7 @@ private:
 
 	core::array<s32> AnimatedVertices_BufferID;
 
-	core::array<video::S3DVertex2TCoords> BaseVertices;
+	core::array<video::S3DVertex> BaseVertices;
 
 	SkinnedMeshBuilder AnimatedMesh;
 	io::IReadFile *B3DFile;

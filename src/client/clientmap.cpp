@@ -101,7 +101,6 @@ namespace {
 		const size_t vcount = dst->Vertices->Data.size();
 		const size_t icount = dst->Indices->Data.size();
 
-		assert(src->getVertexType() == video::EVT_STANDARD);
 		const auto vptr = static_cast<const video::S3DVertex*>(src->getVertices());
 		dst->Vertices->Data.insert(dst->Vertices->Data.end(),
 			vptr, vptr + src->getVertexCount());

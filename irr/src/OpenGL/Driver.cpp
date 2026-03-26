@@ -15,6 +15,7 @@
 
 #include "HWBuffer.h"
 #include "Common.h"
+#include "S3DVertex.h"
 #include "WeightBuffer.h"
 #include "MaterialRenderer.h"
 #include "FixedPipelineRenderer.h"
@@ -65,52 +66,6 @@ static const VertexType vtStandard = {
 				{EVA_AUX, 1, GL_UNSIGNED_SHORT, VertexAttribute::Mode::Integer, offsetof(S3DVertex, Aux)},
 		},
 };
-
-// FIXME: this is actually UB because these vertex classes are not "standard-layout"
-// they violate the following requirement:
-// - only one class in the hierarchy has non-static data members
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Winvalid-offsetof"
-
-
-static const VertexType vt2TCoords = {
-		sizeof(S3DVertex2TCoords),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, Pos)},
-				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex2TCoords, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, TCoords)},
-				{EVA_TCOORD1, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex2TCoords, TCoords2)},
-		},
-};
-
-static const VertexType vtTangents = {
-		sizeof(S3DVertexTangents),
-		{
-				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Pos)},
-				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertexTangents, Color)},
-				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, TCoords)},
-				{EVA_TANGENT, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Tangent)},
-				{EVA_BINORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertexTangents, Binormal)},
-		},
-};
-
-#pragma GCC diagnostic pop
-
-static const VertexType &getVertexTypeDescription(E_VERTEX_TYPE type)
-{
-	switch (type) {
-	case EVT_STANDARD:
-		return vtStandard;
-	case EVT_2TCOORDS:
-		return vt2TCoords;
-	case EVT_TANGENTS:
-		return vtTangents;
-	default:
-		IRR_CODE_UNREACHABLE();
-	}
-}
 
 static const VertexType vt2DImage = {
 		sizeof(S3DVertex),
@@ -606,7 +561,7 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 		GL.BindBuffer(GL_ARRAY_BUFFER, 0);
 	}
 
-	const void *vertices = vb->getData();
+	const auto *vertices = vb->getVertices();
 	if (hwvert) {
 		assert(hwvert->Vbo.exists());
 		GL.BindBuffer(GL_ARRAY_BUFFER, hwvert->Vbo.getName());
@@ -621,7 +576,7 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 	}
 
 	drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
-		PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+		PrimitiveCount, PrimitiveType, ib->getType());
 
 	if (hw_weights) {
 		GL.DisableVertexAttribArray(EVA_WEIGHTS);
@@ -666,9 +621,9 @@ void COpenGL3DriverBase::blitRenderTarget(IRenderTarget *from, IRenderTarget *to
 }
 
 //! draws a vertex primitive list
-void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
+void COpenGL3DriverBase::drawVertexPrimitiveList(const S3DVertex *vertices, u32 vertexCount,
 		const void *indexList, u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
+		scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
 {
 	if (!primitiveCount || !vertexCount)
 		return;
@@ -676,36 +631,11 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 	if (!checkPrimitiveCount(primitiveCount))
 		return;
 
-	CNullDriver::drawVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
+	CNullDriver::drawVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, pType, iType);
 
 	setRenderStates3DMode();
 
-	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
-}
-
-//! draws a vertex primitive list in 2d
-void COpenGL3DriverBase::draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount,
-		const void *indexList, u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
-{
-	if (!primitiveCount || !vertexCount)
-		return;
-
-	if (!vertices)
-		return;
-
-	if (!checkPrimitiveCount(primitiveCount))
-		return;
-
-	CNullDriver::draw2DVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
-
-	setRenderStates2DMode(
-		Material.MaterialType == EMT_TRANSPARENT_VERTEX_ALPHA,
-		Material.getTexture(0),
-		Material.MaterialType == EMT_TRANSPARENT_ALPHA_CHANNEL
-	);
-
-	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
+	drawGeneric(vertices, indexList, primitiveCount, pType, iType);
 }
 
 void COpenGL3DriverBase::draw2DImage(const video::ITexture *texture, const core::position2d<s32> &destPos,
@@ -986,12 +916,13 @@ void COpenGL3DriverBase::drawElements(GLenum primitiveType, const VertexType &ve
 	endDraw(vertexType);
 }
 
-void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList,
+void COpenGL3DriverBase::drawGeneric(const S3DVertex *vertices,
+		const void *indexList,
 		u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
+		scene::E_PRIMITIVE_TYPE pType,
+		E_INDEX_TYPE iType)
 {
-	auto &vTypeDesc = getVertexTypeDescription(vType);
-	beginDraw(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
+	beginDraw(vtStandard, reinterpret_cast<uintptr_t>(vertices));
 	GLenum indexSize = 0;
 
 	switch (iType) {
@@ -1030,7 +961,7 @@ void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList
 		break;
 	}
 
-	endDraw(vTypeDesc);
+	endDraw(vtStandard);
 }
 
 void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, uintptr_t verticesBase)
@@ -1192,7 +1123,7 @@ void COpenGL3DriverBase::setRenderStates3DMode()
 	}
 
 	if (static_cast<u32>(Material.MaterialType) < MaterialRenderers.size())
-		MaterialRenderers[Material.MaterialType].Renderer->OnRender(this, video::EVT_STANDARD);
+		MaterialRenderers[Material.MaterialType].Renderer->OnRender(this);
 
 	CurrentRenderMode = ERM_3D;
 }
@@ -1501,7 +1432,7 @@ void COpenGL3DriverBase::setRenderStates2DMode(bool alpha, bool texture, bool al
 			setTextureRenderStates(InitMaterial2D, false);
 	}
 
-	MaterialRenderer2DActive->OnRender(this, video::EVT_STANDARD);
+	MaterialRenderer2DActive->OnRender(this);
 }
 
 void COpenGL3DriverBase::chooseMaterial2D()

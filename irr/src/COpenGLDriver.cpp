@@ -10,6 +10,7 @@
 #include "IContextManager.h"
 #include "IIndexBuffer.h"
 #include "IVertexBuffer.h"
+#include "S3DVertex.h"
 #include "irrTypes.h"
 
 #ifdef _IRR_COMPILE_WITH_OPENGL_
@@ -250,49 +251,24 @@ bool COpenGLDriver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 		return false;
 
 	const auto *vb = IRR_DOWN_CAST<const scene::IVertexBuffer *>(HWBuffer->Buffer);
-	const void *vertices = vb->getData();
+	const auto *vertices = vb->getVertices();
 	const u32 vertexCount = vb->getCount();
-	const E_VERTEX_TYPE vType = vb->getType();
 	const u32 vertexSize = vb->getElementSize();
 
 	accountHWBufferUpload(vertexSize * vertexCount);
 
-	const c8 *vbuf = static_cast<const c8 *>(vertices);
-	core::array<c8> buffer;
+	std::vector<S3DVertex> buffer;
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra]) {
-		// buffer vertex data, and convert colors...
-		buffer.set_used(vertexSize * vertexCount);
-		memcpy(buffer.pointer(), vertices, vertexSize * vertexCount);
-		vbuf = buffer.const_pointer();
-
+		// buffer vertex data, and convert colors
 		// in order to convert the colors into opengl format (RGBA)
-		switch (vType) {
-		case EVT_STANDARD: {
-			S3DVertex *pb = reinterpret_cast<S3DVertex *>(buffer.pointer());
-			const S3DVertex *po = static_cast<const S3DVertex *>(vertices);
-			for (u32 i = 0; i < vertexCount; i++) {
-				po[i].Color.toOpenGLColor((u8 *)&(pb[i].Color));
-			}
-		} break;
-		case EVT_2TCOORDS: {
-			S3DVertex2TCoords *pb = reinterpret_cast<S3DVertex2TCoords *>(buffer.pointer());
-			const S3DVertex2TCoords *po = static_cast<const S3DVertex2TCoords *>(vertices);
-			for (u32 i = 0; i < vertexCount; i++) {
-				po[i].Color.toOpenGLColor((u8 *)&(pb[i].Color));
-			}
-		} break;
-		case EVT_TANGENTS: {
-			S3DVertexTangents *pb = reinterpret_cast<S3DVertexTangents *>(buffer.pointer());
-			const S3DVertexTangents *po = static_cast<const S3DVertexTangents *>(vertices);
-			for (u32 i = 0; i < vertexCount; i++) {
-				po[i].Color.toOpenGLColor((u8 *)&(pb[i].Color));
-			}
-		} break;
-		default: {
-			return false;
-		}
+		buffer.assign(vertices, vertices + vertexCount);
+		for (u32 i = 0; i < vertexCount; ++i) {
+			const auto color = buffer[i].Color;
+			color.toOpenGLColor((u8 *)&(buffer[i].Color));
 		}
 	}
+
+	// TODO upload tangents
 
 	// get or create buffer
 	bool newBuffer = false;
@@ -309,11 +285,11 @@ bool COpenGLDriver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 
 	// copy data to graphics card
 	if (!newBuffer)
-		extGlBufferSubData(GL_ARRAY_BUFFER, 0, vertexCount * vertexSize, vbuf);
+		extGlBufferSubData(GL_ARRAY_BUFFER, 0, vertexCount * vertexSize, vertices);
 	else {
 		HWBuffer->vbo_Size = vertexCount * vertexSize;
 
-		extGlBufferData(GL_ARRAY_BUFFER, vertexCount * vertexSize, vbuf, convertEHM(HWBuffer->Buffer->MappingHint));
+		extGlBufferData(GL_ARRAY_BUFFER, vertexCount * vertexSize, vertices, convertEHM(HWBuffer->Buffer->MappingHint));
 	}
 
 	extGlBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -438,11 +414,11 @@ void COpenGLDriver::drawBuffers(const scene::IVertexBuffer *vb,
 	auto *hwvert = IRR_DOWN_CAST<SHWBufferLink_opengl *>(getBufferLink(vb));
 	auto *hwidx = IRR_DOWN_CAST<SHWBufferLink_opengl *>(getBufferLink(ib));
 
-	const void *vertices = vb->getData();
+	const auto *vertices = vb->getVertices();
 	if (hwvert) {
 		updateHardwareBuffer(hwvert);
 		extGlBindBuffer(GL_ARRAY_BUFFER, hwvert->vbo_ID);
-		vertices = 0;
+		vertices = nullptr;
 	}
 
 	const void *indexList = ib->getData();
@@ -453,7 +429,7 @@ void COpenGLDriver::drawBuffers(const scene::IVertexBuffer *vb,
 	}
 
 	drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
-		PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+		PrimitiveCount, PrimitiveType, ib->getType());
 
 	if (hwvert)
 		extGlBindBuffer(GL_ARRAY_BUFFER, 0);
@@ -588,9 +564,9 @@ static inline const GLvoid *buffer_offset(const size_t offset)
 }
 
 //! draws a vertex primitive list
-void COpenGLDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
+void COpenGLDriver::drawVertexPrimitiveList(const S3DVertex *vertices, u32 vertexCount,
 		const void *indexList, u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
+		scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
 {
 	if (!primitiveCount || !vertexCount)
 		return;
@@ -598,10 +574,10 @@ void COpenGLDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCoun
 	if (!checkPrimitiveCount(primitiveCount))
 		return;
 
-	CNullDriver::drawVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
+	CNullDriver::drawVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, pType, iType);
 
 	if (vertices && !FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(vertices, vertexCount, vType);
+		getColorBuffer(vertices, vertexCount);
 
 	// draw everything
 	setRenderStates3DMode();
@@ -614,17 +590,7 @@ void COpenGLDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCoun
 	const GLint colorSize = (FeatureAvailable[IRR_ARB_vertex_array_bgra] || FeatureAvailable[IRR_EXT_vertex_array_bgra]) ? GL_BGRA : 4;
 	if (vertices) {
 		if (FeatureAvailable[IRR_ARB_vertex_array_bgra] || FeatureAvailable[IRR_EXT_vertex_array_bgra]) {
-			switch (vType) {
-			case EVT_STANDARD:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Color);
-				break;
-			case EVT_2TCOORDS:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].Color);
-				break;
-			case EVT_TANGENTS:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Color);
-				break;
-			}
+			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Color);
 		} else {
 			// avoid passing broken pointer to OpenGL
 			assert(!ColorBuffer.empty());
@@ -632,87 +598,50 @@ void COpenGLDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCoun
 		}
 	}
 
-	switch (vType) {
-	case EVT_STANDARD:
-		if (vertices) {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Normal);
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Pos);
-		} else {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertex), buffer_offset(12));
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex), 0);
-		}
-
-		if (Feature.MaxTextureUnits > 0 && CacheHandler->getTextureCache()[1]) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
-			else
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
-		}
-		break;
-	case EVT_2TCOORDS:
-		if (vertices) {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].Normal);
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].TCoords);
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].Pos);
-		} else {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(12));
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex2TCoords), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(28));
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(0));
-		}
-
-		if (Feature.MaxTextureUnits > 0) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].TCoords2);
-			else
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(36));
-		}
-		break;
-	case EVT_TANGENTS:
-		if (vertices) {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Normal);
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].TCoords);
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Pos);
-		} else {
-			glNormalPointer(GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(12));
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertexTangents), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(28));
-			glVertexPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(0));
-		}
-
-		if (Feature.MaxTextureUnits > 0) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Tangent);
-			else
-				glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(36));
-
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 2);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Binormal);
-			else
-				glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(48));
-		}
-		break;
+	if (vertices) {
+		glNormalPointer(GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Normal);
+		glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
+		glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Pos);
+	} else {
+		glNormalPointer(GL_FLOAT, sizeof(S3DVertex), buffer_offset(12));
+		glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), buffer_offset(24));
+		glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
+		glVertexPointer(3, GL_FLOAT, sizeof(S3DVertex), 0);
 	}
+
+	if (Feature.MaxTextureUnits > 0 && CacheHandler->getTextureCache()[1]) {
+		CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
+		glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		if (vertices)
+			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
+		else
+			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
+	}
+
+	// TODO tangents:
+		// 	CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
+		// 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		// 	if (vertices)
+		// 		glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Tangent);
+		// 	else
+		// 		glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(36));
+
+		// 	CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 2);
+		// 	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+		// 	if (vertices)
+		// 		glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Binormal);
+		// 	else
+		// 		glTexCoordPointer(3, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(48));
+		// }
 
 	renderArray(indexList, primitiveCount, pType, iType);
 
 	if (Feature.MaxTextureUnits > 0) {
-		if (vType == EVT_TANGENTS) {
+		/* if (vType == EVT_TANGENTS) {
 			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 2);
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		}
-		if ((vType != EVT_STANDARD) || CacheHandler->getTextureCache()[1]) {
+		} */
+		if (CacheHandler->getTextureCache()[1]) {
 			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
 			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
 		}
@@ -720,35 +649,17 @@ void COpenGLDriver::drawVertexPrimitiveList(const void *vertices, u32 vertexCoun
 	}
 }
 
-void COpenGLDriver::getColorBuffer(const void *vertices, u32 vertexCount, E_VERTEX_TYPE vType)
+void COpenGLDriver::getColorBuffer(const S3DVertex *vertices, u32 vertexCount)
 {
 	// convert colors to gl color format.
 	vertexCount *= 4; // reused as color component count
 	ColorBuffer.set_used(vertexCount);
 	u32 i;
 
-	switch (vType) {
-	case EVT_STANDARD: {
-		const S3DVertex *p = static_cast<const S3DVertex *>(vertices);
-		for (i = 0; i < vertexCount; i += 4) {
-			p->Color.toOpenGLColor(&ColorBuffer[i]);
-			++p;
-		}
-	} break;
-	case EVT_2TCOORDS: {
-		const S3DVertex2TCoords *p = static_cast<const S3DVertex2TCoords *>(vertices);
-		for (i = 0; i < vertexCount; i += 4) {
-			p->Color.toOpenGLColor(&ColorBuffer[i]);
-			++p;
-		}
-	} break;
-	case EVT_TANGENTS: {
-		const S3DVertexTangents *p = static_cast<const S3DVertexTangents *>(vertices);
-		for (i = 0; i < vertexCount; i += 4) {
-			p->Color.toOpenGLColor(&ColorBuffer[i]);
-			++p;
-		}
-	} break;
+	const S3DVertex *p = static_cast<const S3DVertex *>(vertices);
+	for (i = 0; i < vertexCount; i += 4) {
+		p->Color.toOpenGLColor(&ColorBuffer[i]);
+		++p;
 	}
 }
 
@@ -820,123 +731,6 @@ void COpenGLDriver::renderArray(const void *indexList, u32 primitiveCount,
 	}
 }
 
-//! draws a vertex primitive list in 2d
-void COpenGLDriver::draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount,
-		const void *indexList, u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
-{
-	if (!primitiveCount || !vertexCount)
-		return;
-
-	if (!checkPrimitiveCount(primitiveCount))
-		return;
-
-	CNullDriver::draw2DVertexPrimitiveList(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
-
-	if (vertices && !FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(vertices, vertexCount, vType);
-
-	// draw everything
-	CacheHandler->getTextureCache().set(0, Material.getTexture(0));
-	if (Material.MaterialType == EMT_ONETEXTURE_BLEND) {
-		E_BLEND_FACTOR srcFact;
-		E_BLEND_FACTOR dstFact;
-		E_MODULATE_FUNC modulo;
-		u32 alphaSource;
-		unpack_textureBlendFunc(srcFact, dstFact, modulo, alphaSource, Material.MaterialTypeParam);
-		setRenderStates2DMode(alphaSource & video::EAS_VERTEX_COLOR, (Material.getTexture(0) != 0), (alphaSource & video::EAS_TEXTURE) != 0);
-	} else
-		setRenderStates2DMode(Material.MaterialType == EMT_TRANSPARENT_VERTEX_ALPHA, (Material.getTexture(0) != 0), Material.MaterialType == EMT_TRANSPARENT_ALPHA_CHANNEL);
-
-	if ((pType != scene::EPT_POINTS) && (pType != scene::EPT_POINT_SPRITES))
-		CacheHandler->setClientState(true, false, true, true);
-	else
-		CacheHandler->setClientState(true, false, true, false);
-
-	const GLint colorSize = (FeatureAvailable[IRR_ARB_vertex_array_bgra] || FeatureAvailable[IRR_EXT_vertex_array_bgra]) ? GL_BGRA : 4;
-	if (vertices) {
-		if (FeatureAvailable[IRR_ARB_vertex_array_bgra] || FeatureAvailable[IRR_EXT_vertex_array_bgra]) {
-			switch (vType) {
-			case EVT_STANDARD:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Color);
-				break;
-			case EVT_2TCOORDS:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].Color);
-				break;
-			case EVT_TANGENTS:
-				glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Color);
-				break;
-			}
-		} else {
-			// avoid passing broken pointer to OpenGL
-			assert(!ColorBuffer.empty());
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, 0, &ColorBuffer[0]);
-		}
-	}
-
-	switch (vType) {
-	case EVT_STANDARD:
-		if (vertices) {
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].Pos);
-		} else {
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertex), 0);
-		}
-
-		if (Feature.MaxTextureUnits > 0 && CacheHandler->getTextureCache()[1]) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), &(static_cast<const S3DVertex *>(vertices))[0].TCoords);
-			else
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex), buffer_offset(28));
-		}
-		break;
-	case EVT_2TCOORDS:
-		if (vertices) {
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].TCoords);
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].Pos);
-		} else {
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertex2TCoords), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(28));
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(0));
-		}
-
-		if (Feature.MaxTextureUnits > 0) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glEnableClientState(GL_TEXTURE_COORD_ARRAY);
-			if (vertices)
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), &(static_cast<const S3DVertex2TCoords *>(vertices))[0].TCoords2);
-			else
-				glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertex2TCoords), buffer_offset(36));
-		}
-		break;
-	case EVT_TANGENTS:
-		if (vertices) {
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].TCoords);
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), &(static_cast<const S3DVertexTangents *>(vertices))[0].Pos);
-		} else {
-			glColorPointer(colorSize, GL_UNSIGNED_BYTE, sizeof(S3DVertexTangents), buffer_offset(24));
-			glTexCoordPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(28));
-			glVertexPointer(2, GL_FLOAT, sizeof(S3DVertexTangents), buffer_offset(0));
-		}
-
-		break;
-	}
-
-	renderArray(indexList, primitiveCount, pType, iType);
-
-	if (Feature.MaxTextureUnits > 0) {
-		if ((vType != EVT_STANDARD) || CacheHandler->getTextureCache()[1]) {
-			CacheHandler->setClientActiveTexture(GL_TEXTURE0 + 1);
-			glDisableClientState(GL_TEXTURE_COORD_ARRAY);
-		}
-		CacheHandler->setClientActiveTexture(GL_TEXTURE0);
-	}
-}
-
 void COpenGLDriver::draw2DImage(const video::ITexture *texture, const core::position2d<s32> &destPos,
 		const core::rect<s32> &sourceRect, const core::rect<s32> *clipRect, SColor color,
 		bool useAlphaChannelOfTexture)
@@ -995,7 +789,7 @@ void COpenGLDriver::draw2DImage(const video::ITexture *texture, const core::posi
 	Quad2DVertices[3].TCoords = core::vector2df(tcoords.UpperLeftCorner.X, tcoords.LowerRightCorner.Y);
 
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(Quad2DVertices, 4, EVT_STANDARD);
+		getColorBuffer(Quad2DVertices, 4);
 
 	CacheHandler->setClientState(true, false, true, true);
 
@@ -1071,7 +865,7 @@ void COpenGLDriver::draw2DImage(const video::ITexture *texture, const core::rect
 	Quad2DVertices[3].TCoords = core::vector2df(tcoords.UpperLeftCorner.X, tcoords.LowerRightCorner.Y);
 
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(Quad2DVertices, 4, EVT_STANDARD);
+		getColorBuffer(Quad2DVertices, 4);
 
 	CacheHandler->setClientState(true, false, true, true);
 
@@ -1215,7 +1009,7 @@ void COpenGLDriver::draw2DImageBatch(const video::ITexture *texture,
 	Quad2DVertices[3].Color = color;
 
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(Quad2DVertices, 4, EVT_STANDARD);
+		getColorBuffer(Quad2DVertices, 4);
 
 	CacheHandler->setClientState(true, false, true, true);
 
@@ -1379,7 +1173,7 @@ void COpenGLDriver::draw2DRectangle(const core::rect<s32> &position,
 	Quad2DVertices[3].Pos = core::vector3df((f32)pos.UpperLeftCorner.X, (f32)pos.LowerRightCorner.Y, 0.0f);
 
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(Quad2DVertices, 4, EVT_STANDARD);
+		getColorBuffer(Quad2DVertices, 4);
 
 	CacheHandler->setClientState(true, false, true, false);
 
@@ -1411,7 +1205,7 @@ void COpenGLDriver::draw2DLine(const core::position2d<s32> &start,
 		Quad2DVertices[1].Pos = core::vector3df((f32)end.X, (f32)end.Y, 0.0f);
 
 		if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-			getColorBuffer(Quad2DVertices, 2, EVT_STANDARD);
+			getColorBuffer(Quad2DVertices, 2);
 
 		CacheHandler->setClientState(true, false, true, false);
 
@@ -1589,7 +1383,7 @@ void COpenGLDriver::setRenderStates3DMode()
 	}
 
 	if (static_cast<u32>(Material.MaterialType) < MaterialRenderers.size())
-		MaterialRenderers[Material.MaterialType].Renderer->OnRender(this, video::EVT_STANDARD);
+		MaterialRenderers[Material.MaterialType].Renderer->OnRender(this);
 
 	CurrentRenderMode = ERM_3D;
 }
@@ -2213,7 +2007,7 @@ void COpenGLDriver::draw3DLine(const core::vector3df &start,
 	Quad2DVertices[1].Pos = core::vector3df((f32)end.X, (f32)end.Y, (f32)end.Z);
 
 	if (!FeatureAvailable[IRR_ARB_vertex_array_bgra] && !FeatureAvailable[IRR_EXT_vertex_array_bgra])
-		getColorBuffer(Quad2DVertices, 2, EVT_STANDARD);
+		getColorBuffer(Quad2DVertices, 2);
 
 	CacheHandler->setClientState(true, false, true, false);
 

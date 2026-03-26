@@ -128,7 +128,7 @@ void COpenGL3MaterialRenderer::init(s32 &outMaterialTypeNr,
 		outMaterialTypeNr = Driver->addMaterialRenderer(this);
 }
 
-bool COpenGL3MaterialRenderer::OnRender(IMaterialRendererServices *service, E_VERTEX_TYPE vtxtype)
+bool COpenGL3MaterialRenderer::OnRender(IMaterialRendererServices *service)
 {
 	if (CallBack && Program)
 		CallBack->OnSetConstants(this, UserData);

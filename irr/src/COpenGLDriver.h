@@ -5,6 +5,7 @@
 #pragma once
 
 #include "IIndexBuffer.h"
+#include "S3DVertex.h"
 #include "SIrrCreationParameters.h"
 
 
@@ -97,14 +98,9 @@ public:
 	void blitRenderTarget(IRenderTarget *from, IRenderTarget *to) override;
 
 	//! draws a vertex primitive list
-	virtual void drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
+	virtual void drawVertexPrimitiveList(const S3DVertex *vertices, u32 vertexCount,
 			const void *indexList, u32 primitiveCount,
-			E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType) override;
-
-	//! draws a vertex primitive list in 2d
-	virtual void draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount,
-			const void *indexList, u32 primitiveCount,
-			E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType) override;
+			scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType) override;
 
 	//! queries the features of the driver, returns true if feature is available
 	bool queryFeature(E_VIDEO_DRIVER_FEATURE feature) const override
@@ -326,7 +322,7 @@ private:
 	void assignHardwareLight(u32 lightIndex);
 
 	//! helper function for render setup.
-	void getColorBuffer(const void *vertices, u32 vertexCount, E_VERTEX_TYPE vType);
+	void getColorBuffer(const S3DVertex *vertices, u32 vertexCount);
 
 	//! helper function doing the actual rendering.
 	void renderArray(const void *indexList, u32 primitiveCount,

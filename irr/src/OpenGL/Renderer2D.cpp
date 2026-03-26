@@ -78,7 +78,7 @@ void COpenGL3Renderer2D::OnSetMaterial(const video::SMaterial &material,
 	}
 }
 
-bool COpenGL3Renderer2D::OnRender(IMaterialRendererServices *service, E_VERTEX_TYPE vtxtype)
+bool COpenGL3Renderer2D::OnRender(IMaterialRendererServices *service)
 {
 	return true;
 }

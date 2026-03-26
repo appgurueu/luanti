@@ -46,7 +46,7 @@ public:
 	virtual void OnSetMaterial(const SMaterial &material, const SMaterial &lastMaterial,
 			bool resetAllRenderstates, IMaterialRendererServices *services) override;
 
-	bool OnRender(IMaterialRendererServices *service, E_VERTEX_TYPE vtxtype) override;
+	bool OnRender(IMaterialRendererServices *service) override;
 
 	void OnUnsetMaterial() override;
 

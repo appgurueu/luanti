@@ -56,16 +56,12 @@ public:
 	renderstates but also shader constants.
 	\param service: Pointer to interface providing methods for setting
 	constants and other things.
-	\param vtxtype: Vertex type with which the next rendering will be done.
-	This can be used by the material renderer to set some specific
-	optimized shaders or if this is an incompatible vertex type for this
-	renderer, to refuse rendering for example.
 	\return Returns true if everything is OK, and false if nothing should
 	be rendered. The material renderer can choose to return false for
 	example if he doesn't support the specified vertex type. This is
 	actually done in D3D9 when using a normal mapped material with
 	a vertex type other than EVT_TANGENTS. */
-	virtual bool OnRender(IMaterialRendererServices *service, E_VERTEX_TYPE vtxtype) { return true; }
+	virtual bool OnRender(IMaterialRendererServices *service) { return true; }
 
 	//! Called by the IVideoDriver to unset this material.
 	/** Called during the IVideoDriver::setMaterial() call before the new

@@ -112,15 +112,9 @@ public:
 	const core::rect<s32> &getViewPort() const override;
 
 	//! draws a vertex primitive list
-	virtual void drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
+	virtual void drawVertexPrimitiveList(const S3DVertex *vertices, u32 vertexCount,
 			const void *indexList, u32 primitiveCount,
-			E_VERTEX_TYPE vType = EVT_STANDARD, scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
-			E_INDEX_TYPE iType = EIT_16BIT) override;
-
-	//! draws a vertex primitive list in 2d
-	virtual void draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount,
-			const void *indexList, u32 primitiveCount,
-			E_VERTEX_TYPE vType = EVT_STANDARD, scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
+			scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
 			E_INDEX_TYPE iType = EIT_16BIT) override;
 
 	//! Draws a 3d line.

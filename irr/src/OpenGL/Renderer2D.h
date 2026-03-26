@@ -18,7 +18,7 @@ public:
 	virtual void OnSetMaterial(const SMaterial &material, const SMaterial &lastMaterial,
 			bool resetAllRenderstates, IMaterialRendererServices *services);
 
-	virtual bool OnRender(IMaterialRendererServices *service, E_VERTEX_TYPE vtxtype);
+	virtual bool OnRender(IMaterialRendererServices *service);
 
 protected:
 	bool WithTexture;

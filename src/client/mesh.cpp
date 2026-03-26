@@ -3,6 +3,7 @@
 // Copyright (C) 2010-2013 celeron55, Perttu Ahola <celeron55@gmail.com>
 
 #include "mesh.h"
+#include "CVertexBuffer.h"
 #include "IMeshBuffer.h"
 #include "SSkinMeshBuffer.h"
 #include "constants.h"
@@ -331,12 +332,11 @@ bool checkMeshNormals(scene::IMesh *mesh)
 	return true;
 }
 
-template<class VertexType, class SMeshBufferType>
-static scene::IMeshBuffer *cloneMeshBuffer(scene::IMeshBuffer *mesh_buffer)
+scene::IMeshBuffer *cloneMeshBuffer(scene::IMeshBuffer *mesh_buffer)
 {
-	auto *v = static_cast<VertexType *>(mesh_buffer->getVertices());
+	auto *v = static_cast<video::S3DVertex *>(mesh_buffer->getVertices());
 	u16 *indices = mesh_buffer->getIndices();
-	auto *cloned_buffer = new SMeshBufferType();
+	auto *cloned_buffer = new scene::SMeshBuffer();
 	cloned_buffer->append(v, mesh_buffer->getVertexCount(), indices,
 			mesh_buffer->getIndexCount());
 	// Rigidly animated meshes may have transformation matrices that need to be applied
@@ -348,20 +348,6 @@ static scene::IMeshBuffer *cloneMeshBuffer(scene::IMeshBuffer *mesh_buffer)
 		});
 	}
 	return cloned_buffer;
-}
-
-scene::IMeshBuffer* cloneMeshBuffer(scene::IMeshBuffer *mesh_buffer)
-{
-	switch (mesh_buffer->getVertexType()) {
-	case video::EVT_STANDARD:
-		return cloneMeshBuffer<video::S3DVertex, scene::SMeshBuffer>(mesh_buffer);
-	case video::EVT_2TCOORDS:
-		return cloneMeshBuffer<video::S3DVertex2TCoords, scene::SMeshBufferLightMap>(mesh_buffer);
-	case video::EVT_TANGENTS:
-		return cloneMeshBuffer<video::S3DVertexTangents, scene::SMeshBufferTangents>(mesh_buffer);
-	}
-	sanity_check(false);
-	return NULL;
 }
 
 scene::SMesh* cloneStaticMesh(scene::IMesh *src_mesh)
