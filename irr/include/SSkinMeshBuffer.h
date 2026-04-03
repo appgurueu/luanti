@@ -25,6 +25,10 @@ struct SSkinMeshBuffer final : public IMeshBuffer
 	SSkinMeshBuffer() : Vertices(new SVertexBuffer()), Indices(new SIndexBuffer())
 	{}
 
+	SSkinMeshBuffer(irr_ptr<SVertexBuffer> &&vertices, irr_ptr<SIndexBuffer> &&indices) :
+			Vertices(std::move(vertices)), Indices(std::move(indices))
+	{}
+
 	//! Constructor for standard vertices
 	SSkinMeshBuffer(std::vector<video::S3DVertex> &&vertices, std::vector<u16> &&indices) :
 			SSkinMeshBuffer()

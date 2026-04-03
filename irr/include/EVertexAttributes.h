@@ -8,18 +8,19 @@ enum E_VERTEX_ATTRIBUTES
 {
 	EVA_POSITION = 0,
 	EVA_NORMAL,
-	EVA_COLOR,
+	EVA_COLOR0,
 	EVA_AUX,
 	EVA_TCOORD0,
 	EVA_TCOORD1,
+	EVA_COLOR1, // TODO reorder?
 	EVA_TANGENT,
-	EVA_BINORMAL,
 	EVA_WEIGHTS,
 	EVA_JOINT_IDS,
 	EVA_COUNT
 };
 
 //! Array holding the built in vertex attribute names
+//! @note must match attributes prepended in shader.cpp
 const char *const sBuiltInVertexAttributeNames[] = {
 		"inVertexPosition",
 		"inVertexNormal",
@@ -27,8 +28,8 @@ const char *const sBuiltInVertexAttributeNames[] = {
 		"inVertexAux",
 		"inTexCoord0",
 		"inTexCoord1",
+		"inVertexColor1", // (BGRA <-> RGBA swapped)
 		"inVertexTangent",
-		"inVertexBinormal",
 		"inVertexWeights",
 		"inVertexJointIDs",
 		0,

@@ -61,7 +61,7 @@ static const VertexType vtStandard = {
 		{
 				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
 				{EVA_NORMAL, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Normal)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
+				{EVA_COLOR0, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
 				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, TCoords)},
 				{EVA_AUX, 1, GL_UNSIGNED_SHORT, VertexAttribute::Mode::Integer, offsetof(S3DVertex, Aux)},
 		},
@@ -71,7 +71,7 @@ static const VertexType vt2DImage = {
 		sizeof(S3DVertex),
 		{
 				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
+				{EVA_COLOR0, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
 				{EVA_TCOORD0, 2, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, TCoords)},
 		},
 };
@@ -80,7 +80,7 @@ static const VertexType vtPrimitive = {
 		sizeof(S3DVertex),
 		{
 				{EVA_POSITION, 3, GL_FLOAT, VertexAttribute::Mode::Regular, offsetof(S3DVertex, Pos)},
-				{EVA_COLOR, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
+				{EVA_COLOR0, 4, GL_UNSIGNED_BYTE, VertexAttribute::Mode::Normalized, offsetof(S3DVertex, Color)},
 		},
 };
 
@@ -517,6 +517,8 @@ COpenGL3DriverBase::SHWBufferLink *COpenGL3DriverBase::createHardwareBuffer(cons
 	return link;
 }
 
+using SHWBufferLink_opengl = COpenGL3DriverBase::SHWBufferLink_opengl;
+
 void COpenGL3DriverBase::deleteHardwareBuffer(SHWBufferLink *HWBuffer)
 {
 	if (!HWBuffer)
@@ -528,6 +530,37 @@ void COpenGL3DriverBase::deleteHardwareBuffer(SHWBufferLink *HWBuffer)
 	CNullDriver::deleteHardwareBuffer(HWBuffer);
 }
 
+template<class F>
+void COpenGL3DriverBase::doWithArrayBuffer(SHWBufferLink_opengl *hw_link, const F &f)
+{
+	if (!hw_link)
+		return;
+
+	GL.BindBuffer(GL_ARRAY_BUFFER, hw_link->Vbo.getName());
+	f();
+	GL.BindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+void COpenGL3DriverBase::bindFloatAttribute(SHWBufferLink_opengl *hw_link,
+	video::E_VERTEX_ATTRIBUTES va, size_t comp_cnt)
+{
+	doWithArrayBuffer(hw_link, [&]() {
+		GL.VertexAttribPointer(va, comp_cnt, GL_FLOAT, GL_FALSE, sizeof(f32) * comp_cnt, nullptr);
+		GL.EnableVertexAttribArray(va);
+	});
+}
+
+SHWBufferLink_opengl *COpenGL3DriverBase::updateHwBuf(const scene::HWBuffer *buf)
+{
+	if (!buf)
+		return nullptr;
+
+	auto *hw_link = static_cast<SHWBufferLink_opengl *>(getBufferLink(buf));
+	updateHardwareBuffer(hw_link);
+	assert(hw_link->Vbo.exists());
+	return hw_link;
+}
+
 void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
 	scene::E_PRIMITIVE_TYPE PrimitiveType)
@@ -535,22 +568,19 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 	if (!vb || !ib)
 		return;
 
-	const auto *wb = vb->getWeightBuffer();
-	SHWBufferLink_opengl *hw_weights = nullptr;
-	if (wb) {
-		hw_weights = static_cast<SHWBufferLink_opengl *>(getBufferLink(wb));
-		updateHardwareBuffer(hw_weights);
-		assert(hw_weights->Vbo.exists());
-	}
+	// Update buffers
 
-	auto *hwvert = static_cast<SHWBufferLink_opengl *>(getBufferLink(vb));
-	auto *hwidx = static_cast<SHWBufferLink_opengl *>(getBufferLink(ib));
-	updateHardwareBuffer(hwvert);
-	updateHardwareBuffer(hwidx);
+	auto *hw_vert = updateHwBuf(vb);
+	auto *hw_idx = updateHwBuf(ib);
+	auto *hw_weights = updateHwBuf(vb->getWeightBuffer());
+	auto *hw_tangents = updateHwBuf(vb->getTangentBuffer());
+	auto *hw_texcoord2 = updateHwBuf(vb->getTexCoordBuffer2());
+	auto *hw_color2 = updateHwBuf(vb->getColorBuffer2()); // TODO might need extra care for swapping...
 
-	if (hw_weights) {
-		// Bind the weight & joint ID VBOs
-		GL.BindBuffer(GL_ARRAY_BUFFER, hw_weights->Vbo.getName());
+	// Bind buffers
+
+	doWithArrayBuffer(hw_weights, [&]() {
+		// Weight & joint ID VBOs
 		const GLsizei stride = sizeof(scene::WeightBuffer::VertexWeights);
 		GL.VertexAttribPointer(EVA_WEIGHTS, 4, GL_FLOAT, GL_FALSE, stride,
 				reinterpret_cast<void *>(offsetof(scene::WeightBuffer::VertexWeights, weights)));
@@ -558,34 +588,50 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 		GL.VertexAttribIPointer(EVA_JOINT_IDS, 4,  GL_UNSIGNED_SHORT, stride,
 				reinterpret_cast<void *>(offsetof(scene::WeightBuffer::VertexWeights, joint_ids)));
 		GL.EnableVertexAttribArray(EVA_JOINT_IDS);
-		GL.BindBuffer(GL_ARRAY_BUFFER, 0);
+	});
+
+	bindFloatAttribute(hw_tangents, EVA_TANGENT, 4);
+	bindFloatAttribute(hw_texcoord2, EVA_TCOORD1, 2);
+
+	doWithArrayBuffer(hw_color2, [&]() {
+		GL.VertexAttribPointer(EVA_COLOR1, 4, GL_UNSIGNED_BYTE, GL_TRUE, 4, nullptr);
+		GL.EnableVertexAttribArray(EVA_COLOR1);
+	});
+
+	const auto *vertices_adhoc = vb->getVertices();
+	if (hw_vert) {
+		assert(hw_vert->Vbo.exists());
+		GL.BindBuffer(GL_ARRAY_BUFFER, hw_vert->Vbo.getName());
+		vertices_adhoc = nullptr;
 	}
 
-	const auto *vertices = vb->getVertices();
-	if (hwvert) {
-		assert(hwvert->Vbo.exists());
-		GL.BindBuffer(GL_ARRAY_BUFFER, hwvert->Vbo.getName());
-		vertices = nullptr;
+	const void *idxs_adhoc = ib->getData();
+	if (hw_idx) {
+		assert(hw_idx->Vbo.exists());
+		GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, hw_idx->Vbo.getName());
+		idxs_adhoc = nullptr;
 	}
 
-	const void *indexList = ib->getData();
-	if (hwidx) {
-		assert(hwidx->Vbo.exists());
-		GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, hwidx->Vbo.getName());
-		indexList = nullptr;
-	}
-
-	drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
+	// Draw. Note that the *_adhoc pointers are null if the buffers don't use EHM_NONE.
+	drawVertexPrimitiveList(vertices_adhoc, vb->getCount(), idxs_adhoc,
 		PrimitiveCount, PrimitiveType, ib->getType());
+
+	// Disable attributes & unbind buffers
 
 	if (hw_weights) {
 		GL.DisableVertexAttribArray(EVA_WEIGHTS);
 		GL.VertexAttrib4f(EVA_WEIGHTS, 0.0f, 0.0f, 0.0f, 0.0f);
 		GL.DisableVertexAttribArray(EVA_JOINT_IDS);
 	}
-	if (hwvert)
+	if (hw_tangents)
+		GL.DisableVertexAttribArray(EVA_TANGENT);
+	if (hw_texcoord2)
+		GL.DisableVertexAttribArray(EVA_TCOORD1);
+	if (hw_color2)
+		GL.DisableVertexAttribArray(EVA_COLOR1);
+	if (hw_vert)
 		GL.BindBuffer(GL_ARRAY_BUFFER, 0);
-	if (hwidx)
+	if (hw_idx)
 		GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 }
 

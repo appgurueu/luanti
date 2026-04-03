@@ -731,8 +731,8 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 		vertex_header += R"(
 			ATTRIBUTE_(4) mediump vec2 inTexCoord0;
 			ATTRIBUTE_(5) mediump vec2 inTexCoord1;
-			ATTRIBUTE_(6) mediump vec4 inVertexTangent;
-			ATTRIBUTE_(7) mediump vec4 inVertexBinormal;
+			ATTRIBUTE_(6) lowp vec4 inVertexColor1;
+			ATTRIBUTE_(7) mediump vec4 inVertexTangent;
 		)";
 		if (shaderinfo.input_constants.count("USE_SKINNING") > 0) {
 			vertex_header += "ATTRIBUTE_(8) mediump vec4 inVertexWeights;\n";
@@ -767,6 +767,7 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 			#define mediump
 			#define highp
 		)";
+		// TODO cursed
 		vertex_header = R"(
 			#define mWorldView gl_ModelViewMatrix
 			#define mWorldViewProj gl_ModelViewProjectionMatrix
@@ -775,9 +776,10 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 			#define inVertexPosition gl_Vertex
 			#define inVertexColor gl_Color
 			#define inTexCoord0 gl_MultiTexCoord0
+			#define inTexCoord1 gl_MultiTexCoord1
 			#define inVertexNormal gl_Normal
-			#define inVertexTangent gl_MultiTexCoord1
-			#define inVertexBinormal gl_MultiTexCoord2
+			#define inVertexColor1 gl_MultiTexCoord1
+			#define inVertexTangent gl_MultiTexCoord2
 
 			#define VARYING_ varying
 			#define CENTROID_ centroid

@@ -69,6 +69,18 @@ struct CVertexBuffer final : public IVertexBuffer
 	TangentBuffer *getTangentBuffer() override
 	{ return Tangents.get(); }
 
+	const TexCoordBuffer2 *getTexCoordBuffer2() const override
+	{ return TexCoords2.get(); }
+
+	TexCoordBuffer2 *getTexCoordBuffer2() override
+	{ return TexCoords2.get(); }
+
+	const ColorBuffer2 *getColorBuffer2() const override
+	{ return Colors2.get(); }
+
+	ColorBuffer2 *getColorBuffer2() override
+	{ return Colors2.get(); }
+
 	void useSwSkinning() override
 	{
 		if (!Weights || UseSwSkinning)
@@ -81,11 +93,16 @@ struct CVertexBuffer final : public IVertexBuffer
 	//! Vertices of this buffer
 	std::vector<video::S3DVertex> Data;
 
-	//! Optional weights for skinning
-	irr_ptr<WeightBuffer> Weights;
 	//! Optional tangents
 	irr_ptr<TangentBuffer> Tangents;
+	//! Optional second set of texture coordinates
+	irr_ptr<TexCoordBuffer2> TexCoords2;
+	//! Optional second set of colors
+	irr_ptr<ColorBuffer2> Colors2;
 
+	//! Optional weights for skinning
+	irr_ptr<WeightBuffer> Weights;
+	//! Whether to use software skinning, only relevant if weights are present
 	bool UseSwSkinning = false;
 };
 

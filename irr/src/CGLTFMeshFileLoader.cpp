@@ -1,15 +1,15 @@
-// Minetest
+// Luanti
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #include "CGLTFMeshFileLoader.h"
 
+#include "S3DVertex.h"
 #include "SMaterialLayer.h"
 #include "coreutil.h"
 #include "SkinnedMesh.h"
 #include "IAnimatedMesh.h"
 #include "IReadFile.h"
 #include "irrTypes.h"
-#include "irr_ptr.h"
 #include "matrix4.h"
 #include "path.h"
 #include "quaternion.h"
@@ -50,6 +50,14 @@ template <>
 core::vector3df convertHandedness(const core::vector3df &p)
 {
 	return core::vector3df(p.X, p.Y, -p.Z);
+}
+
+template <>
+std::array<f32, 4> convertHandedness(const std::array<f32, 4> &tangent)
+{
+	auto a = tangent;
+	a[2] = -a[2];
+	return a;
 }
 
 template <>
@@ -401,27 +409,67 @@ void SelfType::MeshExtractor::addPrimitive(
 		const std::optional<std::size_t> skinIdx,
 		SkinnedMesh::SJoint *parent)
 {
-	auto vertices = getVertices(primitive);
-	if (!vertices.has_value())
-		return; // "When positions are not specified, client implementations SHOULD skip primitive’s rendering"
+	const auto &attributes = primitive.attributes;
+	if (!primitive.attributes.position)
+		return; // "When positions are not specified, client implementations SHOULD skip primitive's rendering"
 
-	const auto n_vertices = vertices->size();
-
+	const auto n_vertices = m_gltf_model.accessors->at(*attributes.position).count;
 	// Excludes the max value for consistency.
 	if (n_vertices >= std::numeric_limits<u16>::max())
 		throw std::runtime_error("too many vertices");
 
-	auto maybeIndices = getIndices(primitive);
-	std::vector<u16> indices;
-	if (maybeIndices.has_value()) {
-		indices = std::move(*maybeIndices);
-		checkIndices(indices, vertices->size());
-	} else {
-		// Non-indexed geometry
-		indices = generateIndices(vertices->size());
+	std::vector<video::S3DVertex> vertices;	
+	vertices.resize(n_vertices);
+	copyPositions(*attributes.position, vertices);
+
+	if (const auto normalAccessorIdx = attributes.normal) {
+		copyNormals(*normalAccessorIdx, vertices);
+	}
+	// TODO verify that the automatic normal recalculation done in Luanti indeed works correctly
+
+	if (const auto &texcoords = attributes.texcoord) {
+		const auto tCoordAccessorIdx = texcoords->at(0);
+		copyTCoords(tCoordAccessorIdx, vertices);
 	}
 
-	auto *meshbuf = new SSkinMeshBuffer(std::move(*vertices), std::move(indices));
+	// TODO load colors
+	if (const auto &color = attributes.color) {
+		if (color->size() > 1)
+			warn("found more than one set of vertex colors, but only one is supported");
+	}
+
+	auto vbuf = make_irr<SVertexBuffer>();
+	vbuf->Data = std::move(vertices);
+
+	// Load additional attributes
+
+	if (const auto &texcoords = attributes.texcoord) {
+		if (texcoords->size() == 2) {
+			std::vector<core::vector2df> tcoords2(n_vertices);
+			copyTCoords2(texcoords->at(1), tcoords2);
+			vbuf->TexCoords2 = make_irr<TexCoordBuffer2>(std::move(tcoords2));
+		} else if (texcoords->size() > 2) {
+			warn("found more than two sets of texture coordinates, but only up to two are supported");
+		}
+	}
+
+	if (const auto tangentAccessorIdx = primitive.attributes.tangent) {
+		std::vector<Tangents> tangents(n_vertices);
+		copyTangents(*tangentAccessorIdx, tangents);
+		vbuf->Tangents = make_irr<TangentBuffer>(std::move(tangents));
+	}
+
+	// TODO support u32 indices
+	std::vector<u16> indices;
+	if (auto maybeIndices = getIndices(primitive)) {
+		indices = std::move(*maybeIndices);
+		checkIndices(indices, n_vertices);
+	} else {
+		// Non-indexed geometry
+		indices = generateIndices(n_vertices);
+	}
+
+	auto *meshbuf = new SSkinMeshBuffer(std::move(vertices), std::move(indices));
 	const auto meshbufNr = m_irr_model.addMeshBuffer(meshbuf);
 
 	if (primitive.material.has_value()) {
@@ -783,39 +831,6 @@ std::optional<std::vector<u16>> SelfType::MeshExtractor::getIndices(
 }
 
 /**
- * Create a vector of video::S3DVertex (model data) from a mesh & primitive index.
- */
-std::optional<std::vector<video::S3DVertex>> SelfType::MeshExtractor::getVertices(
-		const tiniergltf::MeshPrimitive &primitive) const
-{
-	const auto &attributes = primitive.attributes;
-	const auto positionAccessorIdx = attributes.position;
-	if (!positionAccessorIdx.has_value()) {
-		// "When positions are not specified, client implementations SHOULD skip primitive's rendering"
-		return std::nullopt;
-	}
-
-	std::vector<video::S3DVertex> vertices;
-	const auto vertexCount = m_gltf_model.accessors->at(*positionAccessorIdx).count;
-	vertices.resize(vertexCount);
-	copyPositions(*positionAccessorIdx, vertices);
-
-	const auto normalAccessorIdx = attributes.normal;
-	if (normalAccessorIdx.has_value()) {
-		copyNormals(normalAccessorIdx.value(), vertices);
-	}
-	// TODO verify that the automatic normal recalculation done in Minetest indeed works correctly
-
-	const auto &texcoords = attributes.texcoord;
-	if (texcoords.has_value()) {
-		const auto tCoordAccessorIdx = texcoords->at(0);
-		copyTCoords(tCoordAccessorIdx, vertices);
-	}
-
-	return vertices;
-}
-
-/**
  * Get the amount of meshes that a model contains.
 */
 std::size_t SelfType::MeshExtractor::getMeshCount() const
@@ -832,13 +847,10 @@ std::size_t SelfType::MeshExtractor::getPrimitiveCount(
 	return m_gltf_model.meshes->at(meshIdx).primitives.size();
 }
 
-/**
- * Streams vertex positions raw data into usable buffer via reference.
- * Buffer: ref Vector<video::S3DVertex>
-*/
+/// Streams vertex positions raw data into usable buffer via reference.
 void SelfType::MeshExtractor::copyPositions(
 		const std::size_t accessorIdx,
-		std::vector<video::S3DVertex>& vertices) const
+		std::vector<video::S3DVertex> &vertices) const
 {
 	const auto accessor = Accessor<core::vector3df>::make(m_gltf_model, accessorIdx);
 	for (std::size_t i = 0; i < accessor.getCount(); i++) {
@@ -846,13 +858,10 @@ void SelfType::MeshExtractor::copyPositions(
 	}
 }
 
-/**
- * Streams normals raw data into usable buffer via reference.
- * Buffer: ref Vector<video::S3DVertex>
-*/
+/// Streams normals raw data into usable buffer via reference.
 void SelfType::MeshExtractor::copyNormals(
 		const std::size_t accessorIdx,
-		std::vector<video::S3DVertex>& vertices) const
+		std::vector<video::S3DVertex> &vertices) const
 {
 	const auto accessor = Accessor<core::vector3df>::make(m_gltf_model, accessorIdx);
 	for (std::size_t i = 0; i < accessor.getCount(); ++i) {
@@ -860,10 +869,18 @@ void SelfType::MeshExtractor::copyNormals(
 	}
 }
 
-/**
- * Streams texture coordinate raw data into usable buffer via reference.
- * Buffer: ref Vector<video::S3DVertex>
-*/
+/// Streams tangents raw data into usable buffer via reference.
+void SelfType::MeshExtractor::copyTangents(
+		const std::size_t accessorIdx,
+		std::vector<Tangents> &tangents) const
+{
+	const auto accessor = Accessor<std::array<f32, 4>>::make(m_gltf_model, accessorIdx);
+	for (std::size_t i = 0; i < accessor.getCount(); ++i) {
+		tangents[i] = convertHandedness(accessor.get(i));
+	}
+}
+
+/// Streams texture coordinate raw data into usable buffer via reference.
 void SelfType::MeshExtractor::copyTCoords(
 		const std::size_t accessorIdx,
 		std::vector<video::S3DVertex>& vertices) const
@@ -880,6 +897,28 @@ void SelfType::MeshExtractor::copyTCoords(
 		const auto count = std::visit([](auto &&a) { return a.getCount(); }, accessor);
 		for (std::size_t i = 0; i < count; ++i) {
 			vertices[i].TCoords = core::vector2d<f32>(getNormalizedValues(accessor, i));
+		}
+	}
+}
+
+/// Streams texture coordinate raw data into usable buffer via reference.
+// TODO dedup
+void SelfType::MeshExtractor::copyTCoords2(
+		const std::size_t accessorIdx,
+		std::vector<core::vector2df>& tcoords) const
+{
+	const auto componentType = m_gltf_model.accessors->at(accessorIdx).componentType;
+	if (componentType == tiniergltf::Accessor::ComponentType::FLOAT) {
+		// If floats are used, they need not be normalized: Wrapping may take effect.
+		const auto accessor = Accessor<std::array<f32, 2>>::make(m_gltf_model, accessorIdx);
+		for (std::size_t i = 0; i < accessor.getCount(); ++i) {
+			tcoords[i] = core::vector2d<f32>(accessor.get(i));
+		}
+	} else {
+		const auto accessor = createNormalizedValuesAccessor<2>(m_gltf_model, accessorIdx);
+		const auto count = std::visit([](auto &&a) { return a.getCount(); }, accessor);
+		for (std::size_t i = 0; i < count; ++i) {
+			tcoords[i] = core::vector2d<f32>(getNormalizedValues(accessor, i));
 		}
 	}
 }

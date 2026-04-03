@@ -16,6 +16,7 @@
 #include "EDriverFeatures.h"
 #include "ExtensionHandler.h"
 #include "IContextManager.h"
+#include "EVertexAttributes.h"
 
 namespace video
 {
@@ -323,6 +324,18 @@ protected:
 	STextureFormatInfo TextureFormats[ECF_UNKNOWN] = {};
 
 private:
+
+	/// Perform an operation with a buffer bound as array buffer. The buffer is unbound afterwards.
+	template<class F>
+	void doWithArrayBuffer(SHWBufferLink_opengl *hw_link, const F &f);
+
+	/// Bind a densely packed float attribute
+	void bindFloatAttribute(SHWBufferLink_opengl *hw_link,
+		video::E_VERTEX_ATTRIBUTES va, size_t comp_cnt);
+
+	/// Update a hardware buffer and return the corresponding link
+	SHWBufferLink_opengl *updateHwBuf(const scene::HWBuffer *buf);
+
 	COpenGL3Renderer2D *MaterialRenderer2DActive;
 	COpenGL3Renderer2D *MaterialRenderer2DTexture;
 	COpenGL3Renderer2D *MaterialRenderer2DNoTexture;

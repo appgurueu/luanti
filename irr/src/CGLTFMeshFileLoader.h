@@ -1,8 +1,9 @@
-// Minetest
+// Luanti
 // SPDX-License-Identifier: LGPL-2.1-or-later
 
 #pragma once
 
+#include "IVertexBuffer.h"
 #include "SkinnedMesh.h"
 #include "IMeshLoader.h"
 #include "IReadFile.h"
@@ -108,9 +109,6 @@ private:
 		std::optional<std::vector<u16>> getIndices(
 				const tiniergltf::MeshPrimitive &primitive) const;
 
-		std::optional<std::vector<video::S3DVertex>> getVertices(
-				const tiniergltf::MeshPrimitive &primitive) const;
-
 		std::size_t getMeshCount() const;
 
 		std::size_t getPrimitiveCount(const std::size_t meshIdx) const;
@@ -133,13 +131,19 @@ private:
 		}
 
 		void copyPositions(const std::size_t accessorIdx,
-				std::vector<video::S3DVertex>& vertices) const;
+				std::vector<video::S3DVertex> &vertices) const;
 
 		void copyNormals(const std::size_t accessorIdx,
-				std::vector<video::S3DVertex>& vertices) const;
+				std::vector<video::S3DVertex> &vertices) const;
 
 		void copyTCoords(const std::size_t accessorIdx,
-				std::vector<video::S3DVertex>& vertices) const;
+				std::vector<video::S3DVertex> &vertices) const;
+
+		void copyTCoords2(const std::size_t accessorIdx,
+				std::vector<core::vector2df> &tcoords) const;
+
+		void copyTangents(const std::size_t accessorIdx,
+				std::vector<Tangents> &tangents) const;
 
 		void addPrimitive(const tiniergltf::MeshPrimitive &primitive,
 				const std::optional<std::size_t> skinIdx,
