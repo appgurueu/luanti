@@ -11,6 +11,10 @@
 #include "S3DVertex.h"
 #include "irr_ptr.h"
 #include "vector3d.h"
+
+// TODO this ends up including matrix4.h which is not great :/
+// if we took raw pointers instead of vectors,
+// we could forward declare matrix4 and avoid this...
 #include "WeightBuffer.h"
 
 namespace scene
