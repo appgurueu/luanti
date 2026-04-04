@@ -4,7 +4,7 @@
 
 #include "CNullDriver.h"
 #include "IIndexBuffer.h"
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "IVideoDriver.h"
 #include "S3DVertex.h"
 #include "SMaterial.h"
@@ -930,7 +930,7 @@ void CNullDriver::getFog(SColor &color, E_FOG_TYPE &fogType, f32 &start, f32 &en
 	rangeFog = RangeFog;
 }
 
-void CNullDriver::drawBuffers(const scene::IVertexBuffer *vb,
+void CNullDriver::drawBuffers(const scene::VertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType)
 {
@@ -1034,7 +1034,7 @@ bool CNullDriver::isHardwareBufferRecommend(const scene::HWBuffer *buf)
 	if (buf->MappingHint == scene::EHM_NEVER)
 		return false;
 
-	if (dynamic_cast<const scene::IVertexBuffer *>(buf)) {
+	if (dynamic_cast<const scene::VertexBuffer *>(buf)) {
 		return buf->getCount() >= MinVertexCountForVBO;
 	} else if (dynamic_cast<const scene::IIndexBuffer *>(buf)) {
 		// This is a bit stupid

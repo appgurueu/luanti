@@ -8,7 +8,7 @@
 #include "S3DVertex.h"
 #include "SMaterial.h"
 #include "aabbox3d.h"
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "IIndexBuffer.h"
 #include "EHardwareBufferFlags.h"
 #include "EPrimitiveTypes.h"
@@ -47,10 +47,10 @@ public:
 	virtual const video::SMaterial &getMaterial() const = 0;
 
 	/// Get the vertex buffer
-	virtual const scene::IVertexBuffer *getVertexBuffer() const = 0;
+	virtual const scene::VertexBuffer *getVertexBuffer() const = 0;
 
 	/// Get the vertex buffer
-	virtual scene::IVertexBuffer *getVertexBuffer() = 0;
+	virtual scene::VertexBuffer *getVertexBuffer() = 0;
 
 	/// Get the index buffer
 	virtual const scene::IIndexBuffer *getIndexBuffer() const = 0;

@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "SkinnedMesh.h"
 #include "IMeshLoader.h"
 #include "IReadFile.h"

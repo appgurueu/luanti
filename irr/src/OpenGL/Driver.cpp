@@ -561,7 +561,7 @@ SHWBufferLink_opengl *COpenGL3DriverBase::updateHwBuf(const scene::HWBuffer *buf
 	return hw_link;
 }
 
-void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
+void COpenGL3DriverBase::drawBuffers(const scene::VertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
 	scene::E_PRIMITIVE_TYPE PrimitiveType)
 {

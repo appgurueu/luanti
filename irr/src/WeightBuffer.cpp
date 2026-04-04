@@ -2,6 +2,7 @@
 // For conditions of distribution and use, see copyright notice in irrlicht.h
 
 #include "WeightBuffer.h"
+#include "VertexBuffer.h"
 
 #include <algorithm>
 #include <numeric>
@@ -57,7 +58,7 @@ void WeightBuffer::skinVertex(u32 vertex_id, core::vector3df &pos, core::vector3
 	return weights[vertex_id].skinVertex(pos, normal, joint_transforms);
 }
 
-void WeightBuffer::skin(IVertexBuffer *dst,
+void WeightBuffer::skin(VertexBuffer *dst,
 		const std::vector<core::matrix4> &joint_transforms)
 {
 	assert(animated_vertices.has_value());
@@ -96,7 +97,7 @@ void WeightBuffer::finalize()
 	animated_vertices->shrink_to_fit();
 }
 
-void WeightBuffer::updateStaticPose(const IVertexBuffer *vbuf)
+void WeightBuffer::updateStaticPose(const VertexBuffer *vbuf)
 {
 	if (!static_pose)
 		static_pose = std::make_unique<VertexGeometry[]>(animated_vertices->size());
@@ -107,7 +108,7 @@ void WeightBuffer::updateStaticPose(const IVertexBuffer *vbuf)
 	}
 }
 
-void WeightBuffer::resetToStaticPose(IVertexBuffer *vbuf) const
+void WeightBuffer::resetToStaticPose(VertexBuffer *vbuf) const
 {
 	assert(animated_vertices.has_value());
 	if (!static_pose)

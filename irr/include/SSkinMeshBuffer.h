@@ -6,10 +6,9 @@
 
 #include "EPrimitiveTypes.h"
 #include "IMeshBuffer.h"
-#include "CVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "CIndexBuffer.h"
 #include "WeightBuffer.h"
-#include "IVertexBuffer.h"
 #include "S3DVertex.h"
 #include "vector3d.h"
 #include <cassert>
@@ -22,10 +21,10 @@ namespace scene
 struct SSkinMeshBuffer final : public IMeshBuffer
 {
 	//! Default constructor
-	SSkinMeshBuffer() : Vertices(new SVertexBuffer()), Indices(new SIndexBuffer())
+	SSkinMeshBuffer() : Vertices(new VertexBuffer()), Indices(new SIndexBuffer())
 	{}
 
-	SSkinMeshBuffer(irr_ptr<SVertexBuffer> &&vertices, irr_ptr<SIndexBuffer> &&indices) :
+	SSkinMeshBuffer(irr_ptr<VertexBuffer> &&vertices, irr_ptr<SIndexBuffer> &&indices) :
 			Vertices(std::move(vertices)), Indices(std::move(indices))
 	{}
 
@@ -49,12 +48,12 @@ struct SSkinMeshBuffer final : public IMeshBuffer
 		return Material;
 	}
 
-	const scene::IVertexBuffer *getVertexBuffer() const override
+	const scene::VertexBuffer *getVertexBuffer() const override
 	{
 		return Vertices.get();
 	}
 
-	scene::IVertexBuffer *getVertexBuffer() override
+	scene::VertexBuffer *getVertexBuffer() override
 	{
 		return Vertices.get();
 	}
@@ -144,7 +143,7 @@ struct SSkinMeshBuffer final : public IMeshBuffer
 		return const_cast<SSkinMeshBuffer*>(this)->getWeights();
 	}
 
-	irr_ptr<SVertexBuffer> Vertices;
+	irr_ptr<VertexBuffer> Vertices;
 	irr_ptr<SIndexBuffer> Indices;
 
 	core::matrix4 Transformation;

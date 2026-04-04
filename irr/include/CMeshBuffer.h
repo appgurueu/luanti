@@ -7,7 +7,7 @@
 #include <vector>
 #include "EPrimitiveTypes.h"
 #include "IMeshBuffer.h"
-#include "CVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "CIndexBuffer.h"
 #include "S3DVertex.h"
 
@@ -18,7 +18,7 @@ class CMeshBuffer final : public IMeshBuffer
 {
 public:
 	//! Default constructor for empty meshbuffer
-	CMeshBuffer() : Vertices(new SVertexBuffer()), Indices(new SIndexBuffer())
+	CMeshBuffer() : Vertices(new VertexBuffer()), Indices(new SIndexBuffer())
 	{}
 
 	//! Get material of this meshbuffer
@@ -35,12 +35,12 @@ public:
 		return Material;
 	}
 
-	const scene::IVertexBuffer *getVertexBuffer() const override
+	const scene::VertexBuffer *getVertexBuffer() const override
 	{
 		return Vertices.get();
 	}
 
-	scene::IVertexBuffer *getVertexBuffer() override
+	scene::VertexBuffer *getVertexBuffer() override
 	{
 		return Vertices.get();
 	}
@@ -118,7 +118,7 @@ public:
 	//! Material for this meshbuffer.
 	video::SMaterial Material;
 	//! Vertex buffer
-	irr_ptr<SVertexBuffer> Vertices;
+	irr_ptr<VertexBuffer> Vertices;
 	//! Index buffer
 	irr_ptr<SIndexBuffer> Indices;
 	//! Bounding box of this meshbuffer.

@@ -6,7 +6,7 @@
 
 #include "HWBuffer.h"
 #include "IIndexBuffer.h"
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "IVideoDriver.h"
 #include "IFileSystem.h"
 #include "IGPUProgrammingServices.h"
@@ -261,7 +261,7 @@ public:
 	}
 
 	// Note: this should handle hw buffers
-	virtual void drawBuffers(const scene::IVertexBuffer *vb,
+	virtual void drawBuffers(const scene::VertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) override;
 

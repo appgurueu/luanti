@@ -418,7 +418,7 @@ void SelfType::MeshExtractor::addPrimitive(
 	if (n_vertices >= std::numeric_limits<u16>::max())
 		throw std::runtime_error("too many vertices");
 
-	std::vector<video::S3DVertex> vertices;	
+	std::vector<video::S3DVertex> vertices;
 	vertices.resize(n_vertices);
 	copyPositions(*attributes.position, vertices);
 
@@ -438,7 +438,7 @@ void SelfType::MeshExtractor::addPrimitive(
 			warn("found more than one set of vertex colors, but only one is supported");
 	}
 
-	auto vbuf = make_irr<SVertexBuffer>();
+	auto vbuf = make_irr<VertexBuffer>();
 	vbuf->Data = std::move(vertices);
 
 	// Load additional attributes

@@ -64,7 +64,7 @@ public:
 	//! Delete hardware buffer (only some drivers can)
 	void deleteHardwareBuffer(SHWBufferLink *HWBuffer) override;
 
-	void drawBuffers(const scene::IVertexBuffer *vb,
+	void drawBuffers(const scene::VertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) override;
 

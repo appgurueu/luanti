@@ -9,7 +9,7 @@
 #include "HWBuffer.h"
 #include "IContextManager.h"
 #include "IIndexBuffer.h"
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "S3DVertex.h"
 #include "irrTypes.h"
 
@@ -250,7 +250,7 @@ bool COpenGLDriver::updateVertexHardwareBuffer(SHWBufferLink_opengl *HWBuffer)
 	if (!FeatureAvailable[IRR_ARB_vertex_buffer_object])
 		return false;
 
-	const auto *vb = IRR_DOWN_CAST<const scene::IVertexBuffer *>(HWBuffer->Buffer);
+	const auto *vb = IRR_DOWN_CAST<const scene::VertexBuffer *>(HWBuffer->Buffer);
 	const auto *vertices = vb->getVertices();
 	const u32 vertexCount = vb->getCount();
 	const u32 vertexSize = vb->getElementSize();
@@ -404,7 +404,7 @@ void COpenGLDriver::deleteHardwareBuffer(SHWBufferLink *_link)
 	CNullDriver::deleteHardwareBuffer(_link);
 }
 
-void COpenGLDriver::drawBuffers(const scene::IVertexBuffer *vb,
+void COpenGLDriver::drawBuffers(const scene::VertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
 	scene::E_PRIMITIVE_TYPE PrimitiveType)
 {

@@ -7,7 +7,6 @@
 #include "HWBuffer.h"
 #include "vector3d.h"
 #include "matrix4.h"
-#include "IVertexBuffer.h"
 
 #include <cassert>
 #include <memory>
@@ -16,6 +15,8 @@
 
 namespace scene
 {
+
+struct VertexBuffer;
 
 struct WeightBuffer final : public HWBuffer
 {
@@ -69,15 +70,15 @@ struct WeightBuffer final : public HWBuffer
 			const std::vector<core::matrix4> &joint_transforms) const;
 
 	/// @note src and dst can be the same buffer
-	void skin(IVertexBuffer *dst,
+	void skin(VertexBuffer *dst,
 			const std::vector<core::matrix4> &joint_transforms);
 
 	/// Prepares this buffer for use in skinning.
 	void finalize();
 
-	void updateStaticPose(const IVertexBuffer *vbuf);
+	void updateStaticPose(const VertexBuffer *vbuf);
 
-	void resetToStaticPose(IVertexBuffer *vbuf) const;
+	void resetToStaticPose(VertexBuffer *vbuf) const;
 };
 
 } // end namespace scene

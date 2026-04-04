@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "IVertexBuffer.h"
+#include "VertexBuffer.h"
 #include "rect.h"
 #include "SColor.h"
 #include "IImage.h"
@@ -31,7 +31,7 @@ class IWriteFile;
 namespace scene
 {
 class IMeshBuffer;
-class IVertexBuffer;
+struct VertexBuffer;
 class IIndexBuffer;
 class IMesh;
 class IMeshManipulator;
@@ -666,7 +666,7 @@ public:
 	 * @param primCount amount of primitives
 	 * @param pType primitive type
 	 */
-	virtual void drawBuffers(const scene::IVertexBuffer *vb,
+	virtual void drawBuffers(const scene::VertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) = 0;
 
