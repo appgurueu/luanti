@@ -61,7 +61,9 @@ public:
 
 	void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
-		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) override;
+		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
+		const core::matrix4 *transforms = nullptr,
+		u32 instances = 1) override;
 
 	IRenderTarget *addRenderTarget() override;
 
@@ -71,6 +73,11 @@ public:
 	virtual void drawVertexPrimitiveList(const void *vertices, u32 vertexCount,
 			const void *indexList, u32 primitiveCount,
 			E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType) override;
+
+	void drawVertexPrimitiveListInstanced(const void *vertices, u32 vertexCount,
+			const void *indexList, u32 primitiveCount,
+			E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType,
+			u32 instanceCount);
 
 	//! draws a vertex primitive list in 2d
 	virtual void draw2DVertexPrimitiveList(const void *vertices, u32 vertexCount,
@@ -293,14 +300,18 @@ protected:
 	{
 		return MaxJointTransforms;
 	}
-	virtual void setJointTransforms(const std::vector<core::matrix4> &jointMatrices) override;
+	virtual void setJointTransforms(const core::matrix4 *jointMatrices, u32 count) override;
 
 	void drawQuad(const VertexType &vertexType, const S3DVertex (&vertices)[4]);
 	void drawArrays(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount);
 	void drawElements(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount, const u16 *indices, int indexCount);
 
-	void drawGeneric(const void *vertices, const void *indexList, u32 primitiveCount,
+	void drawGeneric(const void *vertices, const void *indices, u32 primitiveCount,
 		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType);
+
+	//! @note per-instance data is expected to be stored in a UBO
+	void drawGenericInstanced(const void *vertices, const void *indices, u32 primitiveCount,
+		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType, u32 instanceCount);
 
 	void beginDraw(const VertexType &vertexType, uintptr_t verticesBase);
 	void endDraw(const VertexType &vertexType);

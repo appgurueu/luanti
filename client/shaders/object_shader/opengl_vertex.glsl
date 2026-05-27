@@ -34,7 +34,7 @@ VARYING_ float nightRatio;
 const vec3 artificialLight = vec3(1.04, 1.04, 1.04);
 VARYING_ float vIDiff;
 
-#ifdef USE_SKINNING
+#if defined(USE_SKINNING) || defined(USE_INSTANCING)
 layout (std140) uniform JointMatrices {
 	mat4 joints[MAX_JOINTS];
 };
@@ -115,6 +115,16 @@ void main(void)
 #else
 	vec4 skinPos = inVertexPosition;
 	vec3 skinNormal = inVertexNormal;
+#endif
+
+#ifdef USE_INSTANCING
+	// mWorld is assumed to be identity
+	// should not be combined with USE_SKINNING (yet).
+	// if it is, should ideally use something like a SSBO to get more storage,
+	// otherwise only a few drawcalls with many joint transforms can be batched.
+	mat4 instance_transform = joints[gl_InstanceID];
+	skinPos = vec4((instance_transform * vec4(skinPos.xyz, 1.0)).xyz, 1.0);
+	skinNormal = (instance_transform * vec4(skinNormal, 0.0)).xyz;
 #endif
 
 #ifdef USE_ARRAY_TEXTURE

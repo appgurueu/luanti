@@ -4,6 +4,8 @@
 
 #pragma once
 
+#include "IMeshBuffer.h"
+#include "SMaterial.h"
 #include "SkinnedMesh.h"
 #include "ISceneManager.h"
 #include "ISceneNode.h"
@@ -11,12 +13,36 @@
 #include "irrString.h"
 #include "irrArray.h"
 #include "IMeshLoader.h"
+#include "irr_ptr.h"
+#include "matrix4.h"
+
+#include <utility>
+#include <functional>
 
 namespace scene
 {
 class IMeshCache;
 
 class SkinnedMesh;
+
+struct RenderPassContext
+{
+	struct DrawCommand
+	{
+		video::SMaterial material;
+		irr_ptr<IMeshBuffer> meshbuf;
+		core::matrix4 world_transform;
+	};
+	std::vector<DrawCommand> draw_commands;
+
+	void addDrawCommand(const video::SMaterial &material,
+			IMeshBuffer *meshbuf, const core::matrix4 &world_transform)
+	{
+		irr_ptr<IMeshBuffer> mb_ptr;
+		mb_ptr.grab(meshbuf);
+		draw_commands.emplace_back(DrawCommand {material, std::move(mb_ptr), world_transform});
+	}
+};
 
 /*!
 	The Scene Manager manages scene nodes, mesh resources, cameras and all the other stuff.
@@ -65,6 +91,11 @@ public:
 
 	//! Clear all nodes which are currently registered for rendering
 	void clearAllRegisteredNodesForRendering() override;
+
+	void registerDrawCommand(const video::SMaterial &material,
+			IMeshBuffer *meshbuf, const core::matrix4 &world_transform) override;
+
+	void flushDrawCommands();
 
 	//! draws all scene nodes
 	void drawAll() override;
@@ -248,6 +279,9 @@ private:
 	std::vector<TransparentNodeEntry> TransparentNodeList;
 	std::vector<TransparentNodeEntry> TransparentEffectNodeList;
 	std::vector<ISceneNode *> GuiNodeList;
+
+	//! Context for a single render pass, consumed
+	RenderPassContext ctx;
 
 	std::vector<IMeshLoader *> MeshLoaderList;
 	std::vector<ISceneNode *> DeletionList;

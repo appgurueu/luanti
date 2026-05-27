@@ -7,6 +7,8 @@
 #include "Driver.h"
 #include <cassert>
 #include "CNullDriver.h"
+#include "EPrimitiveTypes.h"
+#include "EVideoTypes.h"
 #include "IContextManager.h"
 
 #include "COpenGLCoreTexture.h"
@@ -15,6 +17,7 @@
 
 #include "HWBuffer.h"
 #include "Common.h"
+#include "SDL_opengl.h"
 #include "WeightBuffer.h"
 #include "MaterialRenderer.h"
 #include "FixedPipelineRenderer.h"
@@ -27,6 +30,8 @@
 #include "os.h"
 
 #include "mt_opengl.h"
+
+#include <iostream>
 
 namespace video
 {
@@ -492,10 +497,10 @@ void COpenGL3DriverBase::setTransform(E_TRANSFORMATION_STATE state, const core::
 	Transformation3DChanged = true;
 }
 
-void COpenGL3DriverBase::setJointTransforms(const std::vector<core::matrix4> &jointMatrices)
+void COpenGL3DriverBase::setJointTransforms(const core::matrix4 *jointMatrices, u32 count)
 {
 	assert(jointMatrices.size() <= getMaxJointTransforms());
-	JointTransformsUBO.upload(jointMatrices.data(), jointMatrices.size() * sizeof(core::matrix4), 0, GL_DYNAMIC_DRAW);
+	JointTransformsUBO.upload(jointMatrices, count * sizeof(core::matrix4), 0, GL_DYNAMIC_DRAW);
 	GL.BindBufferBase(GL_UNIFORM_BUFFER, 0, JointTransformsUBO.getName());
 	TEST_GL_ERROR(this);
 }
@@ -577,7 +582,9 @@ void COpenGL3DriverBase::deleteHardwareBuffer(SHWBufferLink *HWBuffer)
 
 void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
-	scene::E_PRIMITIVE_TYPE PrimitiveType)
+	scene::E_PRIMITIVE_TYPE PrimitiveType,
+	const core::matrix4 *transforms,
+	u32 instanceCount)
 {
 	if (!vb || !ib)
 		return;
@@ -622,8 +629,24 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 		indexList = nullptr;
 	}
 
-	drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
-		PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+	if (instanceCount == 1) {
+		if (transforms)
+			setTransform(ETS_WORLD, *transforms);
+		drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
+			PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+	} else {
+		assert(transforms);
+		setTransform(ETS_WORLD, core::IdentityMatrix);
+		u32 max_joints = getMaxJointTransforms();
+		for (u32 i = 0; i < instanceCount;) {
+			u32 count = std::min<u32>(max_joints, instanceCount - i);
+			setJointTransforms(transforms + i, count); // TODO consider max joints
+			i += count;
+			// TODO could probably hoist some more stuff outta here
+			drawVertexPrimitiveListInstanced(vertices, vb->getCount(), indexList,
+					PrimitiveCount, vb->getType(), PrimitiveType, ib->getType(), count);
+		}
+	}
 
 	if (hw_weights) {
 		GL.DisableVertexAttribArray(EVA_WEIGHTS);
@@ -683,6 +706,26 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 	setRenderStates3DMode();
 
 	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
+}
+
+//! draws a vertex primitive list
+void COpenGL3DriverBase::drawVertexPrimitiveListInstanced(const void *vertices, u32 vertexCount,
+		const void *indexList, u32 primitiveCount,
+		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType,
+		u32 instanceCount)
+{
+	if (!primitiveCount || !vertexCount)
+		return;
+
+	if (!checkPrimitiveCount(primitiveCount))
+		return;
+
+	++FrameStats.Drawcalls;
+	FrameStats.PrimitivesDrawn += primitiveCount * instanceCount;
+
+	setRenderStates3DMode();
+
+	drawGenericInstanced(vertices, indexList, primitiveCount, vType, pType, iType, instanceCount);
 }
 
 //! draws a vertex primitive list in 2d
@@ -988,7 +1031,7 @@ void COpenGL3DriverBase::drawElements(GLenum primitiveType, const VertexType &ve
 	endDraw(vertexType);
 }
 
-void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList,
+void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indices,
 		u32 primitiveCount,
 		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
 {
@@ -1011,22 +1054,70 @@ void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList
 		GL.DrawArrays(GL_POINTS, 0, primitiveCount);
 		break;
 	case scene::EPT_LINE_STRIP:
-		GL.DrawElements(GL_LINE_STRIP, primitiveCount + 1, indexSize, indexList);
+		GL.DrawElements(GL_LINE_STRIP, primitiveCount + 1, indexSize, indices);
 		break;
 	case scene::EPT_LINE_LOOP:
-		GL.DrawElements(GL_LINE_LOOP, primitiveCount, indexSize, indexList);
+		GL.DrawElements(GL_LINE_LOOP, primitiveCount, indexSize, indices);
 		break;
 	case scene::EPT_LINES:
-		GL.DrawElements(GL_LINES, primitiveCount * 2, indexSize, indexList);
+		GL.DrawElements(GL_LINES, primitiveCount * 2, indexSize, indices);
 		break;
 	case scene::EPT_TRIANGLE_STRIP:
-		GL.DrawElements(GL_TRIANGLE_STRIP, primitiveCount + 2, indexSize, indexList);
+		GL.DrawElements(GL_TRIANGLE_STRIP, primitiveCount + 2, indexSize, indices);
 		break;
 	case scene::EPT_TRIANGLE_FAN:
-		GL.DrawElements(GL_TRIANGLE_FAN, primitiveCount + 2, indexSize, indexList);
+		GL.DrawElements(GL_TRIANGLE_FAN, primitiveCount + 2, indexSize, indices);
 		break;
 	case scene::EPT_TRIANGLES:
-		GL.DrawElements(GL_TRIANGLES, primitiveCount * 3, indexSize, indexList);
+		GL.DrawElements(GL_TRIANGLES, primitiveCount * 3, indexSize, indices);
+		break;
+	default:
+		break;
+	}
+
+	endDraw(vTypeDesc);
+}
+
+void COpenGL3DriverBase::drawGenericInstanced(const void *vertices, const void *indices,
+		u32 primitiveCount,
+		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType,
+		u32 instanceCount)
+{
+	auto &vTypeDesc = getVertexTypeDescription(vType);
+	beginDraw(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
+	GLenum indexSize = 0;
+
+	switch (iType) {
+	case EIT_16BIT:
+		indexSize = GL_UNSIGNED_SHORT;
+		break;
+	case EIT_32BIT:
+		indexSize = GL_UNSIGNED_INT;
+		break;
+	}
+
+	switch (pType) {
+	case scene::EPT_POINTS:
+	case scene::EPT_POINT_SPRITES:
+		GL.DrawArraysInstanced(GL_POINTS, 0, primitiveCount, instanceCount);
+		break;
+	case scene::EPT_LINE_STRIP:
+		GL.DrawElementsInstanced(GL_LINE_STRIP, primitiveCount + 1, indexSize, indices, instanceCount);
+		break;
+	case scene::EPT_LINE_LOOP:
+		GL.DrawElementsInstanced(GL_LINE_LOOP, primitiveCount, indexSize, indices, instanceCount);
+		break;
+	case scene::EPT_LINES:
+		GL.DrawElementsInstanced(GL_LINES, primitiveCount * 2, indexSize, indices, instanceCount);
+		break;
+	case scene::EPT_TRIANGLE_STRIP:
+		GL.DrawElementsInstanced(GL_TRIANGLE_STRIP, primitiveCount + 2, indexSize, indices, instanceCount);
+		break;
+	case scene::EPT_TRIANGLE_FAN:
+		GL.DrawElementsInstanced(GL_TRIANGLE_FAN, primitiveCount + 2, indexSize, indices, instanceCount);
+		break;
+	case scene::EPT_TRIANGLES:
+		GL.DrawElementsInstanced(GL_TRIANGLES, primitiveCount * 3, indexSize, indices, instanceCount);
 		break;
 	default:
 		break;

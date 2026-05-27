@@ -59,7 +59,7 @@ public:
 	}
 
 	//! Sets joint transformation matrices for skinned meshes.
-	virtual void setJointTransforms(const std::vector<core::matrix4> &jointMatrices) override
+	virtual void setJointTransforms(const core::matrix4 *jointMatrices, u32 count) override
 	{
 		assert(jointMatrices.size() <= getMaxJointTransforms());
 	};
@@ -266,10 +266,25 @@ public:
 			mb->getPrimitiveCount(), mb->getPrimitiveType());
 	}
 
+	virtual void drawMeshBufferInstanced(const scene::IMeshBuffer *mb,
+			const std::vector<core::matrix4> &world_transforms) override
+	{
+		if (world_transforms.size() == 1) {
+			setTransform(ETS_WORLD, world_transforms[0]);
+			drawMeshBuffer(mb);
+			return;
+		}
+		drawBuffers(mb->getVertexBuffer(), mb->getIndexBuffer(),
+				mb->getPrimitiveCount(), mb->getPrimitiveType(),
+				world_transforms.data(), world_transforms.size());
+	}
+
 	// Note: this should handle hw buffers
 	virtual void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
-		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) override;
+		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
+		const core::matrix4 *transforms = nullptr,
+		u32 instances = 1) override;
 
 	//! Draws the normals of a mesh buffer
 	virtual void drawMeshBufferNormals(const scene::IMeshBuffer *mb, f32 length = 10.f,

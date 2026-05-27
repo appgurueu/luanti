@@ -22,6 +22,8 @@
 #include <optional>
 #include <cassert>
 
+#include <iostream>
+
 namespace scene
 {
 
@@ -182,6 +184,12 @@ void AnimatedMeshSceneNode::OnAnimate(u32 timeMs)
 //! renders the node.
 void AnimatedMeshSceneNode::render()
 {
+	static int stat_dcs = 0;
+	if (stat_dcs > 1000) {
+		stat_dcs = 0;
+		std::cout << "1k DCs issued from AMSN!!!!!!!!!" << std::endl;
+	}
+
 	video::IVideoDriver *driver = SceneManager->getVideoDriver();
 
 	if (!Mesh || !driver)
@@ -199,12 +207,14 @@ void AnimatedMeshSceneNode::render()
 			sm->skinMesh(PerJoint.GlobalMatrices);
 			++driver->getFrameStats().SWSkinnedMeshes;
 		} else if (sm->hasWeights()) {
-			driver->setJointTransforms(sm->calculateSkinMatrices(PerJoint.GlobalMatrices));
+			const auto joint_mats = sm->calculateSkinMatrices(PerJoint.GlobalMatrices);
+			driver->setJointTransforms(joint_mats.data(), joint_mats.size());
 			++driver->getFrameStats().HWSkinnedMeshes;
 		}
 	}
 	driver->setTransform(video::ETS_WORLD, AbsoluteTransformation);
 
+	// TODO check that the meshes used in testing (e.g. obj meshes) don't take this path
 	for (u32 i = 0; i < Mesh->getMeshBufferCount(); ++i) {
 		const bool transparent = driver->needsTransparentRenderPass(Materials[i]);
 
@@ -213,6 +223,14 @@ void AnimatedMeshSceneNode::render()
 		if (transparent == isTransparentPass) {
 			scene::IMeshBuffer *mb = Mesh->getMeshBuffer(i);
 			const video::SMaterial &material = ReadOnlyMaterials ? mb->getMaterial() : Materials[i];
+
+			if (Mesh->getMaxFrameNumber() == 0) {
+				// HACK for testing
+				++stat_dcs;
+				SceneManager->registerDrawCommand(material, mb, AbsoluteTransformation);
+				continue;
+			}
+
 			if (RenderFromIdentity)
 				driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
 			else if (Mesh->getMeshType() == EAMT_SKINNED)

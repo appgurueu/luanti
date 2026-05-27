@@ -855,8 +855,8 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 	if (shadermat == -1) {
 		errorstream << "generateShader(): failed to generate shaders for "
 			<< log_name << ", addHighLevelShaderMaterial failed." << std::endl;
-		dumpShaderProgram(warningstream, "vertex", vertex_shader);
-		dumpShaderProgram(warningstream, "fragment", fragment_shader);
+		//dumpShaderProgram(warningstream, "vertex", vertex_shader);
+		//dumpShaderProgram(warningstream, "fragment", fragment_shader);
 		if (geometry_shader_ptr)
 			dumpShaderProgram(warningstream, "geometry", geometry_shader);
 		throw ShaderException(
@@ -885,6 +885,13 @@ u32 IShaderSource::getShader(const std::string &name,
 		const auto max_joints = RenderingEngine::get_video_driver()->getMaxJointTransforms();
 		if (max_joints > 0) {
 			input_const["USE_SKINNING"] = 1;
+			input_const["USE_INSTANCING"] = 1;
+			input_const["MAX_JOINTS"] = max_joints;
+		}
+	} else {
+		const auto max_joints = RenderingEngine::get_video_driver()->getMaxJointTransforms();
+		if (max_joints > 0) {
+			input_const["USE_INSTANCING"] = 1;
 			input_const["MAX_JOINTS"] = max_joints;
 		}
 	}

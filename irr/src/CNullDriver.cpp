@@ -3,6 +3,7 @@
 // For conditions of distribution and use, see copyright notice in irrlicht.h
 
 #include "CNullDriver.h"
+#include "EVideoTypes.h"
 #include "IIndexBuffer.h"
 #include "IVertexBuffer.h"
 #include "IVideoDriver.h"
@@ -940,7 +941,9 @@ void CNullDriver::getFog(SColor &color, E_FOG_TYPE &fogType, f32 &start, f32 &en
 
 void CNullDriver::drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
-		scene::E_PRIMITIVE_TYPE pType)
+		scene::E_PRIMITIVE_TYPE pType,
+		const core::matrix4 *transforms,
+		u32 instances)
 {
 	if (!vb || !ib)
 		return;
@@ -948,8 +951,13 @@ void CNullDriver::drawBuffers(const scene::IVertexBuffer *vb,
 	// subclass is supposed to override this if it supports hw buffers
 	assert(!vb->Link && !ib->Link);
 
-	drawVertexPrimitiveList(vb->getData(), vb->getCount(), ib->getData(),
-		primCount, vb->getType(), pType, ib->getType());
+	for (u32 i = 0; i < instances; ++i) {
+		if (transforms)
+			setTransform(ETS_WORLD, transforms[i]);
+		drawVertexPrimitiveList(vb->getData(), vb->getCount(), ib->getData(),
+			primCount, vb->getType(), pType, ib->getType());
+	}
+	// could restore ETS_WORLD but eh
 }
 
 //! Draws the normals of a mesh buffer

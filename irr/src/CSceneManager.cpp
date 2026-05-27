@@ -30,6 +30,11 @@
 
 #include "CSceneCollisionManager.h"
 
+#include <cstdint>
+#include <iostream>
+
+#include <unordered_map>
+
 namespace scene
 {
 
@@ -450,6 +455,87 @@ void CSceneManager::clearAllRegisteredNodesForRendering()
 	GuiNodeList.clear();
 }
 
+void CSceneManager::registerDrawCommand(const video::SMaterial &material,
+			IMeshBuffer *meshbuf, const core::matrix4 &world_transform)
+{
+	static int stat_dcs = 0;
+	++stat_dcs;
+	if (stat_dcs > 1000) {
+		stat_dcs = 0;
+		std::cout << "1k DCs issued!!!!!!!!!" << std::endl;
+	}
+
+	// HACK currently only applied to a single pass for simplicity.
+	// also conflicts with transparency sorting, naturally.
+	if (CurrentRenderPass != ESNRP_SOLID) {
+		Driver->setMaterial(material);
+		Driver->setTransform(video::ETS_WORLD, world_transform);
+		Driver->drawMeshBuffer(meshbuf);
+		return;
+	}
+
+	ctx.addDrawCommand(material, meshbuf, world_transform);
+}
+
+struct DrawCommandKey
+{
+	IMeshBuffer *meshbuf;
+	std::size_t material_hash;
+	const video::SMaterial &material;
+	DrawCommandKey(IMeshBuffer *meshbuf, const video::SMaterial &material)
+			: meshbuf(meshbuf), material(material)
+	{
+		material_hash = std::hash<video::SMaterial>{}(material);
+	}
+
+	inline bool operator==(const DrawCommandKey &other) const
+	{
+		return meshbuf == other.meshbuf &&
+				material_hash == other.material_hash &&
+				material == other.material;
+	}
+
+	inline bool operator!=(const DrawCommandKey &other) const
+	{ return !(*this == other); }
+};
+
+struct DrawCommandKeyHash
+{
+	std::size_t operator()(const DrawCommandKey &key) const noexcept
+	{
+		std::size_t h = 0;
+		auto combine = [&](std::size_t x) {
+			h ^= x + 0x9e3779b9 + (h << 6) + (h >> 2);
+		};
+		combine(reinterpret_cast<uintptr_t>(key.meshbuf));
+		combine(key.material_hash);
+		return h;
+	}
+};
+
+void CSceneManager::flushDrawCommands()
+{
+	auto &draw_commands = ctx.draw_commands;
+	std::unordered_map<DrawCommandKey, std::vector<core::matrix4>, DrawCommandKeyHash> batches;
+
+	for (const auto &cmd : draw_commands) {
+		batches[DrawCommandKey(cmd.meshbuf.get(), cmd.material)].push_back(cmd.world_transform);
+	}
+
+	int stat_batched = batches.size();
+
+	for (const auto &[key, mats] : batches) {
+		Driver->setMaterial(key.material);
+		Driver->drawMeshBufferInstanced(key.meshbuf, mats);
+	}
+
+	if (!draw_commands.empty()) {
+		// HACK debug
+		std::cout << "Batched " << draw_commands.size() << " -> " << stat_batched << std::endl;
+	}
+	draw_commands.clear();
+}
+
 //! This method is called just before the rendering process of the whole scene.
 //! draws all scene nodes
 void CSceneManager::drawAll()
@@ -518,9 +604,10 @@ void CSceneManager::drawAll()
 		std::sort(SolidNodeList.begin(), SolidNodeList.end());
 
 		for (auto &it : SolidNodeList)
-			render_node(it.Node);
+			render_node(it.Node); // here fuckers can register
 
 		SolidNodeList.clear();
+		flushDrawCommands();
 	}
 
 	// render transparent objects.

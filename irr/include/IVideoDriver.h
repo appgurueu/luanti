@@ -150,7 +150,7 @@ public:
 	virtual u16 getMaxJointTransforms() const = 0;
 
 	//! Sets joint transformation matrices for skinned meshes.
-	virtual void setJointTransforms(const std::vector<core::matrix4> &jointMatrices) = 0;
+	virtual void setJointTransforms(const core::matrix4 *jointMatrices, u32 count) = 0;
 
 	//! Returns the transformation set by setTransform
 	/** \param state Transformation type to query
@@ -745,16 +745,25 @@ public:
 	/** \param mb Buffer to draw */
 	virtual void drawMeshBuffer(const scene::IMeshBuffer *mb) = 0;
 
+	//! Draw a mesh buffer for each of the given ETS_WORLD transforms
+	//! @note this may be more efficient than individual drawMeshBuffer() invocations
+	virtual void drawMeshBufferInstanced(const scene::IMeshBuffer *mb,
+			const std::vector<core::matrix4> &world_transforms) = 0;
+
 	/**
 	 * Draws a mesh from individual vertex and index buffers.
 	 * @param vb vertices to use
 	 * @param ib indices to use
 	 * @param primCount amount of primitives
 	 * @param pType primitive type
+	 * @param transforms per-instance transformation matrices, omit if already set
+	 * @param instances number of instances to draw
 	 */
 	virtual void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
-		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES) = 0;
+		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
+		const core::matrix4 *transforms = nullptr,
+		u32 instances = 1) = 0;
 
 	//! Draws normals of a mesh buffer
 	/** \param mb Buffer to draw the normals of

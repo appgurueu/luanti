@@ -348,3 +348,22 @@ core.register_chatcommand("bench_bulk_swap_node", {
 		return true, msg
 	end,
 })
+
+core.register_chatcommand("spawn_objects", {
+	description = "Spawn 1000 objects",
+	params = "<entity_name>",
+	func = function(name, entity_name)
+		if entity_name:trim() == "" then
+			entity_name = "testentities:mesh"
+		end
+		local pos = core.get_player_by_name(name):get_pos()
+		local n = 10
+		for x = 1, n do
+			for y = 1, n do
+				for z = 1, n do
+					core.add_entity(pos + 3 * vector.new(x, y, z), entity_name)
+				end
+			end
+		end
+	end,
+})

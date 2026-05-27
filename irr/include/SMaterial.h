@@ -247,6 +247,8 @@ public:
 	{
 	}
 
+	SMaterial(const SMaterial &mat) = default;
+
 	//! Texture layer array.
 	SMaterialLayer TextureLayers[MATERIAL_MAX_TEXTURES];
 

@@ -98,8 +98,8 @@ void CMeshSceneNode::render()
 			// only render transparent buffer if this is the transparent render pass
 			// and solid only in solid pass
 			if (transparent == isTransparentPass) {
-				driver->setMaterial(material);
-				driver->drawMeshBuffer(mb);
+				// TODO check that this path is taken, often
+				SceneManager->registerDrawCommand(material, mb, AbsoluteTransformation);
 			}
 		}
 	}

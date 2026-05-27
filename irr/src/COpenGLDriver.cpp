@@ -431,7 +431,9 @@ void COpenGLDriver::deleteHardwareBuffer(SHWBufferLink *_link)
 
 void COpenGLDriver::drawBuffers(const scene::IVertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
-	scene::E_PRIMITIVE_TYPE PrimitiveType)
+	scene::E_PRIMITIVE_TYPE PrimitiveType,
+	const core::matrix4 *transforms,
+	u32 instances)
 {
 	if (!vb || !ib)
 		return;
@@ -453,8 +455,12 @@ void COpenGLDriver::drawBuffers(const scene::IVertexBuffer *vb,
 		indexList = 0;
 	}
 
-	drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
-		PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+	for (u32 i = 0; i < instances; ++i) {
+		if (transforms)
+			setTransform(ETS_WORLD, transforms[i]);
+		drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
+			PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
+	}
 
 	if (hwvert)
 		extGlBindBuffer(GL_ARRAY_BUFFER, 0);

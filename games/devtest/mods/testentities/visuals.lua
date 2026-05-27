@@ -52,6 +52,9 @@ core.register_entity("testentities:mesh", {
 		textures = {
 			"testnodes_mesh_stripes2.png"
 		},
+		use_texture_alpha = false,
+		visual_size = vector.new(10, 10, 10),
+		static_save = false,
 	},
 })
 

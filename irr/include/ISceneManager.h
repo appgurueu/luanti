@@ -4,7 +4,9 @@
 
 #pragma once
 
+#include "IMeshBuffer.h"
 #include "IReferenceCounted.h"
+#include "SMaterial.h"
 #include "irrArray.h"
 #include "vector3d.h"
 #include "dimension2d.h"
@@ -21,6 +23,7 @@ class IReadFile;
 namespace video
 {
 class IVideoDriver;
+class SMaterial;
 } // end namespace video
 
 namespace scene
@@ -76,6 +79,7 @@ class IBillboardSceneNode;
 class ICameraSceneNode;
 class IDummyTransformationSceneNode;
 class IMesh;
+class IMeshBuffer;
 class SkinnedMesh;
 class IMeshCache;
 class ISceneCollisionManager;
@@ -299,6 +303,10 @@ public:
 	after rendering them. But sometimes you might have to manually reset this.
 	For example when you deleted nodes between registering and rendering. */
 	virtual void clearAllRegisteredNodesForRendering() = 0;
+
+	//! Guess what this does
+	virtual void registerDrawCommand(const video::SMaterial &material,
+			IMeshBuffer *meshbuf, const core::matrix4 &world_transform) = 0;
 
 	//! Draws all the scene nodes.
 	/** This can only be invoked between
