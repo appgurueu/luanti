@@ -25,23 +25,16 @@ class IMeshCache;
 
 class SkinnedMesh;
 
+struct DrawCommand
+{
+	video::SMaterial material;
+	irr_ptr<const IMeshBuffer> meshbuf;
+	std::vector<core::matrix4> transforms;
+};
+
 struct RenderPassContext
 {
-	struct DrawCommand
-	{
-		video::SMaterial material;
-		irr_ptr<IMeshBuffer> meshbuf;
-		core::matrix4 world_transform;
-	};
 	std::vector<DrawCommand> draw_commands;
-
-	void addDrawCommand(const video::SMaterial &material,
-			IMeshBuffer *meshbuf, const core::matrix4 &world_transform)
-	{
-		irr_ptr<IMeshBuffer> mb_ptr;
-		mb_ptr.grab(meshbuf);
-		draw_commands.emplace_back(DrawCommand {material, std::move(mb_ptr), world_transform});
-	}
 };
 
 /*!
@@ -93,7 +86,8 @@ public:
 	void clearAllRegisteredNodesForRendering() override;
 
 	void registerDrawCommand(const video::SMaterial &material,
-			IMeshBuffer *meshbuf, const core::matrix4 &world_transform) override;
+			const IMeshBuffer *meshbuf,
+			const std::vector<core::matrix4> &world_transform) override;
 
 	void flushDrawCommands();
 

@@ -306,7 +306,7 @@ public:
 
 	//! Guess what this does
 	virtual void registerDrawCommand(const video::SMaterial &material,
-			IMeshBuffer *meshbuf, const core::matrix4 &world_transform) = 0;
+			const IMeshBuffer *meshbuf, const std::vector<core::matrix4> &transforms) = 0;
 
 	//! Draws all the scene nodes.
 	/** This can only be invoked between

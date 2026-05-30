@@ -38,6 +38,7 @@ VARYING_ float vIDiff;
 layout (std140) uniform JointMatrices {
 	mat4 joints[MAX_JOINTS];
 };
+uniform int transformStride;
 #endif
 
 #ifdef ENABLE_DYNAMIC_SHADOWS
@@ -97,8 +98,9 @@ float directional_ambient(vec3 normal)
 
 void main(void)
 {
+	int base = gl_InstanceID * transformStride;
 #ifdef USE_SKINNING
-	uvec4 jids = inVertexJointIDs;
+	uvec4 jids = inVertexJointIDs + uvec4(base + 1);
 	vec4 skinPos = inVertexPosition;
 	vec3 skinNormal = inVertexNormal;
 	// Alternatively: Introduce neutral bone at index 0 with identity matrix?
@@ -122,7 +124,7 @@ void main(void)
 	// should not be combined with USE_SKINNING (yet).
 	// if it is, should ideally use something like a SSBO to get more storage,
 	// otherwise only a few drawcalls with many joint transforms can be batched.
-	mat4 instance_transform = joints[gl_InstanceID];
+	mat4 instance_transform = joints[base];
 	skinPos = vec4((instance_transform * vec4(skinPos.xyz, 1.0)).xyz, 1.0);
 	skinNormal = (instance_transform * vec4(skinNormal, 0.0)).xyz;
 #endif

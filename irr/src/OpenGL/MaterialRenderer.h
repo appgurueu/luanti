@@ -57,6 +57,9 @@ public:
 	bool setPixelShaderConstant(s32 index, const s32 *ints, int count) override;
 	bool setPixelShaderConstant(s32 index, const u32 *ints, int count) override;
 
+	// HACK should be u32 but too lazy to implement rn
+	void setVertexShaderConstantTransformStride(s32 stride);
+
 	IVideoDriver *getVideoDriver() override;
 
 protected:
@@ -85,9 +88,15 @@ protected:
 		GLenum type;
 		GLint location;
 	};
+	std::vector<SUniformInfo> UniformInfo;
+
+	struct {
+		// Uniform that gives the number of transforms for each object,
+		// used by instanced drawcalls
+		GLint TransformStride = -1;
+	} CachedUniformLocations;
 
 	GLuint Program;
-	std::vector<SUniformInfo> UniformInfo;
 	s32 UserData;
 };
 

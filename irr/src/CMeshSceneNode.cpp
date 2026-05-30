@@ -98,8 +98,7 @@ void CMeshSceneNode::render()
 			// only render transparent buffer if this is the transparent render pass
 			// and solid only in solid pass
 			if (transparent == isTransparentPass) {
-				// TODO check that this path is taken, often
-				SceneManager->registerDrawCommand(material, mb, AbsoluteTransformation);
+				SceneManager->registerDrawCommand(material, mb, std::vector<core::matrix4>{AbsoluteTransformation});
 			}
 		}
 	}

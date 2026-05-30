@@ -291,6 +291,8 @@ bool COpenGL3MaterialRenderer::linkProgram()
 
 			UniformInfo.push_back(std::move(ui));
 		}
+
+		CachedUniformLocations.TransformStride = getVertexShaderConstantID("transformStride");
 	}
 
 	return true;
@@ -418,6 +420,13 @@ bool COpenGL3MaterialRenderer::setPixelShaderConstant(s32 index, const u32 *ints
 {
 	os::Printer::log("Unsigned int support is unimplemented", ELL_WARNING);
 	return false;
+}
+
+void COpenGL3MaterialRenderer::setVertexShaderConstantTransformStride(s32 stride)
+{
+	const s32 location = CachedUniformLocations.TransformStride;
+	assert(location != -1);
+	setVertexShaderConstant(location, &stride, 1);
 }
 
 IVideoDriver *COpenGL3MaterialRenderer::getVideoDriver()

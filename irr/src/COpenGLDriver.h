@@ -66,8 +66,7 @@ public:
 	void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
-		const core::matrix4 *transforms = nullptr,
-		u32 instances = 1) override;
+		const Instances *instances = nullptr) override;
 
 	//! Create occlusion query.
 	/** Use node for identification and mesh for occlusion test. */

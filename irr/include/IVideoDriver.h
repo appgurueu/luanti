@@ -741,14 +741,18 @@ public:
 			const core::position2d<s32> &end,
 			SColor color = SColor(255, 255, 255, 255)) = 0;
 
+	//! Multiple instances to be drawn with different transforms
+	struct Instances
+	{
+		const core::matrix4 *world_transforms = nullptr;
+		u32 transforms_per_instance = 1; ///< >1 when using hardware skinning
+		u32 count = 1;
+	};
+
 	//! Draws a mesh buffer
 	/** \param mb Buffer to draw */
-	virtual void drawMeshBuffer(const scene::IMeshBuffer *mb) = 0;
-
-	//! Draw a mesh buffer for each of the given ETS_WORLD transforms
-	//! @note this may be more efficient than individual drawMeshBuffer() invocations
-	virtual void drawMeshBufferInstanced(const scene::IMeshBuffer *mb,
-			const std::vector<core::matrix4> &world_transforms) = 0;
+	virtual void drawMeshBuffer(const scene::IMeshBuffer *mb,
+			const Instances *instances = nullptr) = 0;
 
 	/**
 	 * Draws a mesh from individual vertex and index buffers.
@@ -762,8 +766,7 @@ public:
 	virtual void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
-		const core::matrix4 *transforms = nullptr,
-		u32 instances = 1) = 0;
+		const Instances *instances = nullptr) = 0;
 
 	//! Draws normals of a mesh buffer
 	/** \param mb Buffer to draw the normals of

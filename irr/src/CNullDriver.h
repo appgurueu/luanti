@@ -258,33 +258,21 @@ public:
 			const core::position2d<s32> &pos,
 			const core::dimension2d<u32> &size) override;
 
-	void drawMeshBuffer(const scene::IMeshBuffer *mb) override
+	void drawMeshBuffer(const scene::IMeshBuffer *mb,
+		const Instances *instances = nullptr) override
 	{
 		if (!mb)
 			return;
 		drawBuffers(mb->getVertexBuffer(), mb->getIndexBuffer(),
-			mb->getPrimitiveCount(), mb->getPrimitiveType());
-	}
-
-	virtual void drawMeshBufferInstanced(const scene::IMeshBuffer *mb,
-			const std::vector<core::matrix4> &world_transforms) override
-	{
-		if (world_transforms.size() == 1) {
-			setTransform(ETS_WORLD, world_transforms[0]);
-			drawMeshBuffer(mb);
-			return;
-		}
-		drawBuffers(mb->getVertexBuffer(), mb->getIndexBuffer(),
-				mb->getPrimitiveCount(), mb->getPrimitiveType(),
-				world_transforms.data(), world_transforms.size());
+			mb->getPrimitiveCount(), mb->getPrimitiveType(),
+			instances);
 	}
 
 	// Note: this should handle hw buffers
 	virtual void drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType = scene::EPT_TRIANGLES,
-		const core::matrix4 *transforms = nullptr,
-		u32 instances = 1) override;
+		const Instances *instances = nullptr) override;
 
 	//! Draws the normals of a mesh buffer
 	virtual void drawMeshBufferNormals(const scene::IMeshBuffer *mb, f32 length = 10.f,

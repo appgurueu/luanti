@@ -455,34 +455,31 @@ void CSceneManager::clearAllRegisteredNodesForRendering()
 	GuiNodeList.clear();
 }
 
-void CSceneManager::registerDrawCommand(const video::SMaterial &material,
-			IMeshBuffer *meshbuf, const core::matrix4 &world_transform)
-{
-	static int stat_dcs = 0;
-	++stat_dcs;
-	if (stat_dcs > 1000) {
-		stat_dcs = 0;
-		std::cout << "1k DCs issued!!!!!!!!!" << std::endl;
-	}
+using Instances = video::IVideoDriver::Instances;
 
+void CSceneManager::registerDrawCommand(const video::SMaterial &material,
+		const IMeshBuffer *meshbuf,
+		const std::vector<core::matrix4> &transforms)
+{
 	// HACK currently only applied to a single pass for simplicity.
 	// also conflicts with transparency sorting, naturally.
-	if (CurrentRenderPass != ESNRP_SOLID) {
+	if (CurrentRenderPass != ESNRP_SOLID) { // HACK
 		Driver->setMaterial(material);
-		Driver->setTransform(video::ETS_WORLD, world_transform);
-		Driver->drawMeshBuffer(meshbuf);
+		Instances instances = {transforms.data(), 1, (u32) transforms.size()};
+		Driver->drawMeshBuffer(meshbuf, &instances);
 		return;
 	}
-
-	ctx.addDrawCommand(material, meshbuf, world_transform);
+	irr_ptr<const IMeshBuffer> ptr;
+	ptr.grab(meshbuf);
+	ctx.draw_commands.emplace_back(DrawCommand{material, ptr, transforms});
 }
 
 struct DrawCommandKey
 {
-	IMeshBuffer *meshbuf;
+	const IMeshBuffer *meshbuf;
 	std::size_t material_hash;
 	const video::SMaterial &material;
-	DrawCommandKey(IMeshBuffer *meshbuf, const video::SMaterial &material)
+	DrawCommandKey(const IMeshBuffer *meshbuf, const video::SMaterial &material)
 			: meshbuf(meshbuf), material(material)
 	{
 		material_hash = std::hash<video::SMaterial>{}(material);
@@ -513,20 +510,38 @@ struct DrawCommandKeyHash
 	}
 };
 
+struct InstancesVector
+{
+	std::vector<core::matrix4> transforms;
+	u32 transforms_per_instance = 0;
+	u32 instances = 0;
+};
+
 void CSceneManager::flushDrawCommands()
 {
 	auto &draw_commands = ctx.draw_commands;
-	std::unordered_map<DrawCommandKey, std::vector<core::matrix4>, DrawCommandKeyHash> batches;
+
+	std::unordered_map<DrawCommandKey, InstancesVector, DrawCommandKeyHash> batches;
 
 	for (const auto &cmd : draw_commands) {
-		batches[DrawCommandKey(cmd.meshbuf.get(), cmd.material)].push_back(cmd.world_transform);
+		DrawCommandKey key = {cmd.meshbuf.get(), cmd.material};
+		auto it = batches.find(key);
+		if (it == batches.end()) {
+			batches.insert(it, {key, InstancesVector{ cmd.transforms, (u32) cmd.transforms.size(), 1 }});
+		} else {
+			auto &insts = it->second;
+			assert(insts.transforms_per_instance == cmd.transforms.size());
+			insts.transforms.insert(insts.transforms.end(), cmd.transforms.begin(), cmd.transforms.end());
+			++insts.instances;
+		}
 	}
 
 	int stat_batched = batches.size();
 
-	for (const auto &[key, mats] : batches) {
+	for (const auto &[key, insts] : batches) {
 		Driver->setMaterial(key.material);
-		Driver->drawMeshBufferInstanced(key.meshbuf, mats);
+		const Instances instances = {insts.transforms.data(), insts.transforms_per_instance, insts.instances};
+		Driver->drawMeshBuffer(key.meshbuf, &instances);
 	}
 
 	if (!draw_commands.empty()) {

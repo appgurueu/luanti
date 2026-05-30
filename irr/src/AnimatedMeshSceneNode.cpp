@@ -184,12 +184,6 @@ void AnimatedMeshSceneNode::OnAnimate(u32 timeMs)
 //! renders the node.
 void AnimatedMeshSceneNode::render()
 {
-	static int stat_dcs = 0;
-	if (stat_dcs > 1000) {
-		stat_dcs = 0;
-		std::cout << "1k DCs issued from AMSN!!!!!!!!!" << std::endl;
-	}
-
 	video::IVideoDriver *driver = SceneManager->getVideoDriver();
 
 	if (!Mesh || !driver)
@@ -200,6 +194,7 @@ void AnimatedMeshSceneNode::render()
 
 	++PassCount;
 
+	std::vector<core::matrix4> mats{AbsoluteTransformation};
 	if (auto *sm = dynamic_cast<SkinnedMesh *>(Mesh)) {
 		sm->rigidAnimation(PerJoint.GlobalMatrices);
 		if (sm->useSoftwareSkinning()) {
@@ -208,13 +203,13 @@ void AnimatedMeshSceneNode::render()
 			++driver->getFrameStats().SWSkinnedMeshes;
 		} else if (sm->hasWeights()) {
 			const auto joint_mats = sm->calculateSkinMatrices(PerJoint.GlobalMatrices);
-			driver->setJointTransforms(joint_mats.data(), joint_mats.size());
+			mats.insert(mats.end(), joint_mats.begin(), joint_mats.end());
+			// driver->setJointTransforms(joint_mats.data(), joint_mats.size());
 			++driver->getFrameStats().HWSkinnedMeshes;
 		}
 	}
 	driver->setTransform(video::ETS_WORLD, AbsoluteTransformation);
 
-	// TODO check that the meshes used in testing (e.g. obj meshes) don't take this path
 	for (u32 i = 0; i < Mesh->getMeshBufferCount(); ++i) {
 		const bool transparent = driver->needsTransparentRenderPass(Materials[i]);
 
@@ -224,20 +219,15 @@ void AnimatedMeshSceneNode::render()
 			scene::IMeshBuffer *mb = Mesh->getMeshBuffer(i);
 			const video::SMaterial &material = ReadOnlyMaterials ? mb->getMaterial() : Materials[i];
 
-			if (Mesh->getMaxFrameNumber() == 0) {
-				// HACK for testing
-				++stat_dcs;
-				SceneManager->registerDrawCommand(material, mb, AbsoluteTransformation);
-				continue;
-			}
-
 			if (RenderFromIdentity)
-				driver->setTransform(video::ETS_WORLD, core::IdentityMatrix);
+				mats[0] = core::IdentityMatrix;
 			else if (Mesh->getMeshType() == EAMT_SKINNED)
-				driver->setTransform(video::ETS_WORLD, AbsoluteTransformation * ((SSkinMeshBuffer *)mb)->Transformation);
+				mats[0] = AbsoluteTransformation * ((SSkinMeshBuffer *)mb)->Transformation;
+			else
+				mats[0] = AbsoluteTransformation;
 
-			driver->setMaterial(material);
-			driver->drawMeshBuffer(mb);
+			// TODO if there are many mesh buffers, this repeats the matrices.. nasty!
+			SceneManager->registerDrawCommand(material, mb, mats);
 		}
 	}
 

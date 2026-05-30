@@ -17,6 +17,7 @@
 
 #include "HWBuffer.h"
 #include "Common.h"
+#include "IMaterialRenderer.h"
 #include "SDL_opengl.h"
 #include "WeightBuffer.h"
 #include "MaterialRenderer.h"
@@ -583,10 +584,12 @@ void COpenGL3DriverBase::deleteHardwareBuffer(SHWBufferLink *HWBuffer)
 void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 	const scene::IIndexBuffer *ib, u32 PrimitiveCount,
 	scene::E_PRIMITIVE_TYPE PrimitiveType,
-	const core::matrix4 *transforms,
-	u32 instanceCount)
+	const Instances *instances)
 {
-	if (!vb || !ib)
+	if (!vb || vb->getCount() == 0 || !ib || ib->getCount() == 0 || PrimitiveCount == 0)
+		return;
+
+	if (!checkPrimitiveCount(PrimitiveCount))
 		return;
 
 	const auto *wb = vb->getWeightBuffer();
@@ -629,22 +632,34 @@ void COpenGL3DriverBase::drawBuffers(const scene::IVertexBuffer *vb,
 		indexList = nullptr;
 	}
 
-	if (instanceCount == 1) {
-		if (transforms)
-			setTransform(ETS_WORLD, *transforms);
+	if (!instances || instances->count == 1) {
+		if (instances) {
+			assert(instances->world_transforms);
+			if (instances->transforms_per_instance == 1) {
+				setTransform(ETS_WORLD, instances->world_transforms[0]);
+			} else {
+				// Single instance, but skeletally animated
+				setTransform(ETS_WORLD, core::IdentityMatrix);
+				setJointTransforms(instances->world_transforms, instances->transforms_per_instance);
+			}
+		}
 		drawVertexPrimitiveList(vertices, vb->getCount(), indexList,
 			PrimitiveCount, vb->getType(), PrimitiveType, ib->getType());
 	} else {
-		assert(transforms);
+		assert(instances->world_transforms);
 		setTransform(ETS_WORLD, core::IdentityMatrix);
 		u32 max_joints = getMaxJointTransforms();
-		for (u32 i = 0; i < instanceCount;) {
-			u32 count = std::min<u32>(max_joints, instanceCount - i);
-			setJointTransforms(transforms + i, count); // TODO consider max joints
-			i += count;
-			// TODO could probably hoist some more stuff outta here
+		const u32 tpi = instances->transforms_per_instance;
+		setRenderStates3DMode(); // set this just once
+		for (u32 i = 0; i < instances->count;) {
+			u32 step = std::min<u32>(max_joints / tpi, instances->count - i);
+			setJointTransforms(instances->world_transforms + tpi * i, tpi * step);
+			i += step;
+			IMaterialRenderer *shader = getMaterialRenderer(Material.MaterialType);
+			auto *shader_gl3 = IRR_DOWN_CAST<COpenGL3MaterialRenderer *>(shader);
+			shader_gl3->setVertexShaderConstantTransformStride(tpi);
 			drawVertexPrimitiveListInstanced(vertices, vb->getCount(), indexList,
-					PrimitiveCount, vb->getType(), PrimitiveType, ib->getType(), count);
+					PrimitiveCount, vb->getType(), PrimitiveType, ib->getType(), step);
 		}
 	}
 
@@ -708,6 +723,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
 }
 
+// TODO kill
 //! draws a vertex primitive list
 void COpenGL3DriverBase::drawVertexPrimitiveListInstanced(const void *vertices, u32 vertexCount,
 		const void *indexList, u32 primitiveCount,

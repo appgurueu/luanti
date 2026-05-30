@@ -942,21 +942,17 @@ void CNullDriver::getFog(SColor &color, E_FOG_TYPE &fogType, f32 &start, f32 &en
 void CNullDriver::drawBuffers(const scene::IVertexBuffer *vb,
 		const scene::IIndexBuffer *ib, u32 primCount,
 		scene::E_PRIMITIVE_TYPE pType,
-		const core::matrix4 *transforms,
-		u32 instances)
+		const Instances *instances)
 {
 	if (!vb || !ib)
 		return;
 
-	// subclass is supposed to override this if it supports hw buffers
+	// subclass is supposed to override this if it supports hw buffers or instancing
 	assert(!vb->Link && !ib->Link);
+	assert(!instances);
 
-	for (u32 i = 0; i < instances; ++i) {
-		if (transforms)
-			setTransform(ETS_WORLD, transforms[i]);
-		drawVertexPrimitiveList(vb->getData(), vb->getCount(), ib->getData(),
+	drawVertexPrimitiveList(vb->getData(), vb->getCount(), ib->getData(),
 			primCount, vb->getType(), pType, ib->getType());
-	}
 	// could restore ETS_WORLD but eh
 }
 
