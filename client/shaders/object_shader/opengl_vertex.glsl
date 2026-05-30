@@ -39,6 +39,15 @@ layout (std140) uniform JointMatrices {
 	mat4 joints[MAX_JOINTS];
 };
 uniform int transformStride;
+
+// TODO split into two UBOs, one for instances (instance transform, pointer into joint matrices)
+// this lets us avoid repeating shared joints transforms for different mesh buffers
+/* layout (std140) uniform Instances {
+	mat4 transform;
+	int texture_layer;
+	int joint_transform_base;
+	// some other material props or so...
+}; */
 #endif
 
 #ifdef ENABLE_DYNAMIC_SHADOWS

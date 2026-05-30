@@ -463,12 +463,18 @@ void CSceneManager::registerDrawCommand(const video::SMaterial &material,
 {
 	// HACK currently only applied to a single pass for simplicity.
 	// also conflicts with transparency sorting, naturally.
-	if (CurrentRenderPass != ESNRP_SOLID) { // HACK
+	if (CurrentRenderPass != ESNRP_SOLID) {
 		Driver->setMaterial(material);
 		Instances instances = {transforms.data(), 1, (u32) transforms.size()};
 		Driver->drawMeshBuffer(meshbuf, &instances);
 		return;
 	}
+
+	// TODO bail out if mesh buffer is not guaranteed to be frozen.
+	// mesh caches should freeze the mesh buffers they produce.
+	// then again, all we need that meshes are not touched during draw...
+	// though software skinning does *exactly that*.
+	// alternatively, flush all draw commands pertaining to a mesh buffer when it is touched.
 	irr_ptr<const IMeshBuffer> ptr;
 	ptr.grab(meshbuf);
 	ctx.draw_commands.emplace_back(DrawCommand{material, ptr, transforms});
