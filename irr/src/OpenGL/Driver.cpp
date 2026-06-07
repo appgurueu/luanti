@@ -500,7 +500,7 @@ void COpenGL3DriverBase::setTransform(E_TRANSFORMATION_STATE state, const core::
 
 void COpenGL3DriverBase::setJointTransforms(const core::matrix4 *jointMatrices, u32 count)
 {
-	assert(jointMatrices.size() <= getMaxJointTransforms());
+	assert(count <= getMaxJointTransforms());
 	JointTransformsUBO.upload(jointMatrices, count * sizeof(core::matrix4), 0, GL_DYNAMIC_DRAW);
 	GL.BindBufferBase(GL_UNIFORM_BUFFER, 0, JointTransformsUBO.getName());
 	TEST_GL_ERROR(this);

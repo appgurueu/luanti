@@ -61,7 +61,7 @@ public:
 	//! Sets joint transformation matrices for skinned meshes.
 	virtual void setJointTransforms(const core::matrix4 *jointMatrices, u32 count) override
 	{
-		assert(jointMatrices->size() <= getMaxJointTransforms());
+		assert(count <= getMaxJointTransforms());
 	};
 
 	//! Retrieve the number of image loaders
