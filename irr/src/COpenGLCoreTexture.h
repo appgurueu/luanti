@@ -397,12 +397,15 @@ public:
 		const COpenGLCoreTexture *prevTexture = cache.get(0);
 		cache.set(0, this);
 
-		if (Driver->getTextureCreationFlag(ETCF_OPTIMIZED_FOR_SPEED))
-			GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_FASTEST);
-		else if (Driver->getTextureCreationFlag(ETCF_OPTIMIZED_FOR_QUALITY))
-			GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
-		else
-			GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_DONT_CARE);
+		// GL_GENERATE_MIPMAP_HINT was removed from core profile contexts
+		if (Driver->getDriverType() != EDT_OPENGL3) {
+			if (Driver->getTextureCreationFlag(ETCF_OPTIMIZED_FOR_SPEED))
+				GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_FASTEST);
+			else if (Driver->getTextureCreationFlag(ETCF_OPTIMIZED_FOR_QUALITY))
+				GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_NICEST);
+			else
+				GL.Hint(GL_GENERATE_MIPMAP_HINT, GL_DONT_CARE);
+		}
 
 		Driver->irrGlGenerateMipmap(TextureType);
 		TEST_GL_ERROR(Driver);

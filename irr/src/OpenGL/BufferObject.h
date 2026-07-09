@@ -15,6 +15,7 @@ class OGLBufferObject
 public:
 	enum Target : GLenum {
 		TARGET_VBO = GL_ARRAY_BUFFER,
+		TARGET_EBO = GL_ELEMENT_ARRAY_BUFFER,
 		TARGET_UBO = GL_UNIFORM_BUFFER,
 	};
 
@@ -44,6 +45,19 @@ public:
 	 */
 	void upload(const void *data, size_t size, size_t offset,
 		GLenum usage, bool mustShrink = false);
+
+	/**
+	 * Upload buffer data to GL, entirely replacing the previous contents.
+	 *
+	 * The buffer storage is always re-specified ("orphaned") so that GL does
+	 * not have to synchronize with draw calls still reading the old contents,
+	 * which makes this suited for streaming use.
+	 * @param data data pointer
+	 * @param size number of bytes
+	 * @param usage usage pattern passed to GL
+	 * @note the buffer is left bound to its target
+	 */
+	void uploadAndBind(const void *data, size_t size, GLenum usage);
 
 	/**
 	 * Free buffer in GL.

@@ -6,6 +6,7 @@
 
 #pragma once
 
+#include <string>
 #include "HWBuffer.h"
 #include "SIrrCreationParameters.h"
 #include "Common.h"
@@ -284,6 +285,11 @@ protected:
 
 	void loadShaderData(const io::path &vertexShaderName, const io::path &fragmentShaderName, c8 **vertexShaderData, c8 **fragmentShaderData);
 
+	//! Version prelude prepended to the built-in shaders, which are written
+	//! in GLSL ES 1.00 and need translation to a GLSL version available in
+	//! core profile contexts on desktop GL.
+	std::string getShaderPrelude(bool fragment) const;
+
 	bool setMaterialTexture(u32 layerIdx, const video::ITexture *texture);
 
 	//! Same as `CacheHandler->setViewport`, but also sets `ViewPort`
@@ -299,10 +305,16 @@ protected:
 	void drawArrays(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount);
 	void drawElements(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount, const u16 *indices, int indexCount);
 
-	void drawGeneric(const void *vertices, const void *indexList, u32 primitiveCount,
-		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType);
+	void drawGeneric(const void *vertices, u32 vertexCount, const void *indexList,
+		u32 primitiveCount, E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType,
+		E_INDEX_TYPE iType);
 
-	void beginDraw(const VertexType &vertexType, uintptr_t verticesBase);
+	//! Set up vertex attributes for the next draw call.
+	//! A non-null `vertices` pointer refers to client memory, which is
+	//! streamed through a scratch buffer (core profile contexts cannot draw
+	//! from client memory); null means a vertex buffer is already bound and
+	//! attribute pointers are set up as offsets into it.
+	void beginDraw(const VertexType &vertexType, const void *vertices, size_t vertexCount);
 	void endDraw(const VertexType &vertexType);
 
 	COpenGL3CacheHandler *CacheHandler;
@@ -355,6 +367,15 @@ private:
 
 	OGLBufferObject QuadIndexVBO = OGLBufferObject(OGLBufferObject::TARGET_VBO);
 	void initQuadsIndices(u32 max_vertex_count = 65536);
+
+	//! Scratch buffers for streaming client-memory vertex/index data to GL,
+	//! since core profile contexts cannot draw from client memory.
+	OGLBufferObject ScratchVBO = OGLBufferObject(OGLBufferObject::TARGET_VBO);
+	OGLBufferObject ScratchIndexVBO = OGLBufferObject(OGLBufferObject::TARGET_EBO);
+
+	//! Global VAO: core profile contexts require a non-default VAO to be
+	//! bound for all vertex specification and draw calls.
+	GLuint Vao = 0;
 
 	u16 MaxJointTransforms = 0;
 	void initMaxJointTransforms();

@@ -37,6 +37,19 @@ void OGLBufferObject::upload(const void *data, size_t size, size_t offset,
 	GL.BindBuffer(m_target, 0);
 }
 
+void OGLBufferObject::uploadAndBind(const void *data, size_t size, GLenum usage)
+{
+	if (!m_name) {
+		GL.GenBuffers(1, &m_name);
+		if (!m_name)
+			return;
+	}
+
+	GL.BindBuffer(m_target, m_name);
+	GL.BufferData(m_target, size, data, usage);
+	m_size = size;
+}
+
 void OGLBufferObject::destroy()
 {
 	if (m_name)

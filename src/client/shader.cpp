@@ -711,6 +711,11 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 		if (use_glsl3) {
 			shaders_header << "#define ATTRIBUTE_(n) layout(location = n) in\n"
 				"#define texture2D texture\n";
+		} else if (use_glsl15) {
+			// GLSL 1.5 doesn't have `layout(location = ...)`; the attribute
+			// locations are bound via glBindAttribLocation by their names.
+			shaders_header << "#define ATTRIBUTE_(n) in\n"
+				"#define texture2D texture\n";
 		} else {
 			shaders_header << "#define ATTRIBUTE_(n) attribute\n";
 		}
@@ -738,8 +743,6 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 			vertex_header += "ATTRIBUTE_(8) mediump vec4 inVertexWeights;\n";
 			vertex_header += "ATTRIBUTE_(9) mediump uvec4 inVertexJointIDs;\n";
 		}
-		// GLSL 1.5 is a weird version that doesn't have `layout(location=...)`
-		// but `varying` is already deprecated and replaced by `in`/`out`.
 		if (use_glsl3 || use_glsl15) {
 			vertex_header += "#define VARYING_ out\n";
 		} else {
@@ -755,7 +758,11 @@ void ShaderSource::generateShader(ShaderInfo &shaderinfo)
 				"#define gl_FragColor outFragColor\n"
 				"layout(location = 0) out vec4 outFragColor;\n";
 		} else if (use_glsl15) {
-			fragment_header += "#define VARYING_ in\n";
+			// GLSL 1.5 doesn't have `layout(location = ...)`, but a single
+			// fragment output is automatically assigned location 0.
+			fragment_header += "#define VARYING_ in\n"
+				"#define gl_FragColor outFragColor\n"
+				"out vec4 outFragColor;\n";
 		} else {
 			fragment_header += "#define VARYING_ varying\n";
 		}

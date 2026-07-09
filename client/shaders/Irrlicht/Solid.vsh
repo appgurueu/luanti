@@ -1,5 +1,3 @@
-#version 100
-
 /* Attributes */
 
 attribute vec3 inVertexPosition;

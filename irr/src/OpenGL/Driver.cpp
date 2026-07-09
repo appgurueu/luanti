@@ -5,6 +5,7 @@
 // For conditions of distribution and use, see copyright notice in Irrlicht.h
 
 #include <cassert>
+#include <cstring>
 
 #include "Driver.h"
 #include "CNullDriver.h"
@@ -176,7 +177,11 @@ COpenGL3DriverBase::COpenGL3DriverBase(const SIrrlichtCreationParameters &params
 COpenGL3DriverBase::~COpenGL3DriverBase()
 {
 	QuadIndexVBO.destroy();
+	ScratchVBO.destroy();
+	ScratchIndexVBO.destroy();
 	JointTransformsUBO.destroy();
+	if (Vao)
+		GL.DeleteVertexArrays(1, &Vao);
 
 	deleteMaterialRenders();
 
@@ -274,6 +279,13 @@ bool COpenGL3DriverBase::genericDriverInit(const core::dimension2d<u32> &screenS
 		KHRDebugSupported = false;
 	}
 
+	// The default VAO (0) may not be used for vertex specification and draw
+	// calls in core profile contexts; a single global VAO suffices for us.
+	if (Version.Spec == OpenGLSpec::Core || Version.Spec == OpenGLSpec::Compat) {
+		GL.GenVertexArrays(1, &Vao);
+		GL.BindVertexArray(Vao);
+	}
+
 	initQuadsIndices();
 	initMaxJointTransforms();
 
@@ -326,6 +338,26 @@ void COpenGL3DriverBase::printTextureFormats()
 	}
 }
 
+std::string COpenGL3DriverBase::getShaderPrelude(bool fragment) const
+{
+	// The built-in shader sources are written in GLSL ES 1.00 (sans version
+	// directive). On desktop GL we translate them to GLSL 1.50 via macros,
+	// since core profile contexts need not accept GLSL ES shaders
+	// (and may not accept deprecated constructs such as `attribute`).
+	if (Version.Spec == OpenGLSpec::ES)
+		return "#version 100\n";
+	if (fragment) {
+		return "#version 150\n"
+			   "#define varying in\n"
+			   "#define texture2D texture\n"
+			   "out vec4 irr_FragColor;\n"
+			   "#define gl_FragColor irr_FragColor\n";
+	}
+	return "#version 150\n"
+		   "#define attribute in\n"
+		   "#define varying out\n";
+}
+
 void COpenGL3DriverBase::loadShaderData(const io::path &vertexShaderName, const io::path &fragmentShaderName, c8 **vertexShaderData, c8 **fragmentShaderData)
 {
 	io::path vsPath(OGLES2ShaderPath);
@@ -357,9 +389,11 @@ void COpenGL3DriverBase::loadShaderData(const io::path &vertexShaderName, const 
 
 	long size = vsFile->getSize();
 	if (size) {
-		*vertexShaderData = new c8[size + 1];
-		vsFile->read(*vertexShaderData, size);
-		(*vertexShaderData)[size] = 0;
+		const std::string prelude = getShaderPrelude(false);
+		*vertexShaderData = new c8[prelude.size() + size + 1];
+		memcpy(*vertexShaderData, prelude.c_str(), prelude.size());
+		vsFile->read(*vertexShaderData + prelude.size(), size);
+		(*vertexShaderData)[prelude.size() + size] = 0;
 	}
 	{
 		auto tmp = std::string("Loaded ") + std::to_string(size) + " bytes for vertex shader " + vertexShaderName.c_str();
@@ -372,9 +406,11 @@ void COpenGL3DriverBase::loadShaderData(const io::path &vertexShaderName, const 
 		if (fsFile == vsFile)
 			fsFile->seek(0);
 
-		*fragmentShaderData = new c8[size + 1];
-		fsFile->read(*fragmentShaderData, size);
-		(*fragmentShaderData)[size] = 0;
+		const std::string prelude = getShaderPrelude(true);
+		*fragmentShaderData = new c8[prelude.size() + size + 1];
+		memcpy(*fragmentShaderData, prelude.c_str(), prelude.size());
+		fsFile->read(*fragmentShaderData + prelude.size(), size);
+		(*fragmentShaderData)[prelude.size() + size] = 0;
 	}
 	{
 		auto tmp = std::string("Loaded ") + std::to_string(size) + " bytes for fragment shader " + fragmentShaderName.c_str();
@@ -398,32 +434,37 @@ void COpenGL3DriverBase::createMaterialRenderers()
 	// Create built-in materials.
 	// The addition order must be the same as in the E_MATERIAL_TYPE enumeration. Thus the
 
-	const core::stringc VertexShader = OGLES2ShaderPath + "Solid.vsh";
+	// Shaders are loaded via loadShaderData so that they get the dialect prelude.
+	auto addBuiltInMaterial = [this](const c8 *fragmentShaderName, const c8 *shaderName,
+			IShaderConstantSetCallBack *callback, E_MATERIAL_TYPE baseMaterial) {
+		c8 *vertexShaderData = nullptr;
+		c8 *fragmentShaderData = nullptr;
+		loadShaderData(io::path("Solid.vsh"), io::path(fragmentShaderName),
+				&vertexShaderData, &fragmentShaderData);
+		addHighLevelShaderMaterial(vertexShaderData, fragmentShaderData, nullptr, shaderName,
+				scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, callback, baseMaterial, 0);
+		delete[] vertexShaderData;
+		delete[] fragmentShaderData;
+	};
 
 	// EMT_SOLID
-	core::stringc FragmentShader = OGLES2ShaderPath + "Solid.fsh";
-	addHighLevelShaderMaterialFromFiles(VertexShader, FragmentShader, "", "Solid",
-			scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, SolidCB, EMT_SOLID, 0);
+	addBuiltInMaterial("Solid.fsh", "Solid", SolidCB, EMT_SOLID);
 
 	// EMT_TRANSPARENT_ALPHA_CHANNEL
-	FragmentShader = OGLES2ShaderPath + "TransparentAlphaChannel.fsh";
-	addHighLevelShaderMaterialFromFiles(VertexShader, FragmentShader, "", "TransparentAlphaChannel",
-			scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, TransparentAlphaChannelCB, EMT_TRANSPARENT_ALPHA_CHANNEL, 0);
+	addBuiltInMaterial("TransparentAlphaChannel.fsh", "TransparentAlphaChannel",
+			TransparentAlphaChannelCB, EMT_TRANSPARENT_ALPHA_CHANNEL);
 
 	// EMT_TRANSPARENT_ALPHA_CHANNEL_REF
-	FragmentShader = OGLES2ShaderPath + "TransparentAlphaChannelRef.fsh";
-	addHighLevelShaderMaterialFromFiles(VertexShader, FragmentShader, "", "TransparentAlphaChannelRef",
-			scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, TransparentAlphaChannelRefCB, EMT_SOLID, 0);
+	addBuiltInMaterial("TransparentAlphaChannelRef.fsh", "TransparentAlphaChannelRef",
+			TransparentAlphaChannelRefCB, EMT_SOLID);
 
 	// EMT_TRANSPARENT_VERTEX_ALPHA
-	FragmentShader = OGLES2ShaderPath + "TransparentVertexAlpha.fsh";
-	addHighLevelShaderMaterialFromFiles(VertexShader, FragmentShader, "", "TransparentVertexAlpha",
-			scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, TransparentVertexAlphaCB, EMT_TRANSPARENT_ALPHA_CHANNEL, 0);
+	addBuiltInMaterial("TransparentVertexAlpha.fsh", "TransparentVertexAlpha",
+			TransparentVertexAlphaCB, EMT_TRANSPARENT_ALPHA_CHANNEL);
 
 	// EMT_ONETEXTURE_BLEND
-	FragmentShader = OGLES2ShaderPath + "OneTextureBlend.fsh";
-	addHighLevelShaderMaterialFromFiles(VertexShader, FragmentShader, "", "OneTextureBlend",
-			scene::EPT_TRIANGLES, scene::EPT_TRIANGLE_STRIP, 0, OneTextureBlendCB, EMT_ONETEXTURE_BLEND, 0);
+	addBuiltInMaterial("OneTextureBlend.fsh", "OneTextureBlend",
+			OneTextureBlendCB, EMT_ONETEXTURE_BLEND);
 
 	// Drop callbacks.
 
@@ -683,7 +724,7 @@ void COpenGL3DriverBase::drawVertexPrimitiveList(const void *vertices, u32 verte
 
 	setRenderStates3DMode();
 
-	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
+	drawGeneric(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
 }
 
 //! draws a vertex primitive list in 2d
@@ -708,7 +749,7 @@ void COpenGL3DriverBase::draw2DVertexPrimitiveList(const void *vertices, u32 ver
 		Material.MaterialType == EMT_TRANSPARENT_ALPHA_CHANNEL
 	);
 
-	drawGeneric(vertices, indexList, primitiveCount, vType, pType, iType);
+	drawGeneric(vertices, vertexCount, indexList, primitiveCount, vType, pType, iType);
 }
 
 void COpenGL3DriverBase::draw2DImage(const video::ITexture *texture, const core::position2d<s32> &destPos,
@@ -977,67 +1018,89 @@ void COpenGL3DriverBase::drawQuad(const VertexType &vertexType, const S3DVertex 
 
 void COpenGL3DriverBase::drawArrays(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount)
 {
-	beginDraw(vertexType, reinterpret_cast<uintptr_t>(vertices));
+	beginDraw(vertexType, vertices, vertexCount);
 	GL.DrawArrays(primitiveType, 0, vertexCount);
 	endDraw(vertexType);
 }
 
 void COpenGL3DriverBase::drawElements(GLenum primitiveType, const VertexType &vertexType, const void *vertices, int vertexCount, const u16 *indices, int indexCount)
 {
-	beginDraw(vertexType, reinterpret_cast<uintptr_t>(vertices));
-	GL.DrawRangeElements(primitiveType, 0, vertexCount - 1, indexCount, GL_UNSIGNED_SHORT, indices);
+	beginDraw(vertexType, vertices, vertexCount);
+	// a null `indices` pointer means an index buffer is already bound
+	if (indices)
+		ScratchIndexVBO.uploadAndBind(indices, indexCount * sizeof(u16), GL_STREAM_DRAW);
+	GL.DrawRangeElements(primitiveType, 0, vertexCount - 1, indexCount, GL_UNSIGNED_SHORT, 0);
+	if (indices)
+		GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	endDraw(vertexType);
 }
 
-void COpenGL3DriverBase::drawGeneric(const void *vertices, const void *indexList,
-		u32 primitiveCount,
+void COpenGL3DriverBase::drawGeneric(const void *vertices, u32 vertexCount,
+		const void *indexList, u32 primitiveCount,
 		E_VERTEX_TYPE vType, scene::E_PRIMITIVE_TYPE pType, E_INDEX_TYPE iType)
 {
 	auto &vTypeDesc = getVertexTypeDescription(vType);
-	beginDraw(vTypeDesc, reinterpret_cast<uintptr_t>(vertices));
-	GLenum indexSize = 0;
+	beginDraw(vTypeDesc, vertices, vertexCount);
 
-	switch (iType) {
-	case EIT_16BIT:
-		indexSize = GL_UNSIGNED_SHORT;
-		break;
-	case EIT_32BIT:
-		indexSize = GL_UNSIGNED_INT;
-		break;
-	}
-
+	GLenum primitive = 0;
+	u32 indexCount = 0;
 	switch (pType) {
 	case scene::EPT_POINTS:
 	case scene::EPT_POINT_SPRITES:
-		GL.DrawArrays(GL_POINTS, 0, primitiveCount);
-		break;
+		break; // does not use indices
 	case scene::EPT_LINE_STRIP:
-		GL.DrawElements(GL_LINE_STRIP, primitiveCount + 1, indexSize, indexList);
+		primitive = GL_LINE_STRIP;
+		indexCount = primitiveCount + 1;
 		break;
 	case scene::EPT_LINE_LOOP:
-		GL.DrawElements(GL_LINE_LOOP, primitiveCount, indexSize, indexList);
+		primitive = GL_LINE_LOOP;
+		indexCount = primitiveCount;
 		break;
 	case scene::EPT_LINES:
-		GL.DrawElements(GL_LINES, primitiveCount * 2, indexSize, indexList);
+		primitive = GL_LINES;
+		indexCount = primitiveCount * 2;
 		break;
 	case scene::EPT_TRIANGLE_STRIP:
-		GL.DrawElements(GL_TRIANGLE_STRIP, primitiveCount + 2, indexSize, indexList);
+		primitive = GL_TRIANGLE_STRIP;
+		indexCount = primitiveCount + 2;
 		break;
 	case scene::EPT_TRIANGLE_FAN:
-		GL.DrawElements(GL_TRIANGLE_FAN, primitiveCount + 2, indexSize, indexList);
+		primitive = GL_TRIANGLE_FAN;
+		indexCount = primitiveCount + 2;
 		break;
 	case scene::EPT_TRIANGLES:
-		GL.DrawElements(GL_TRIANGLES, primitiveCount * 3, indexSize, indexList);
+		primitive = GL_TRIANGLES;
+		indexCount = primitiveCount * 3;
 		break;
-	default:
-		break;
+	}
+
+	if (!primitive) {
+		GL.DrawArrays(GL_POINTS, 0, primitiveCount);
+	} else {
+		const GLenum indexSize = iType == EIT_16BIT ? GL_UNSIGNED_SHORT : GL_UNSIGNED_INT;
+		// a null `indexList` pointer means an index buffer is already bound
+		if (indexList) {
+			const size_t bytesPerIndex = iType == EIT_16BIT ? sizeof(u16) : sizeof(u32);
+			ScratchIndexVBO.uploadAndBind(indexList, indexCount * bytesPerIndex, GL_STREAM_DRAW);
+		}
+		GL.DrawElements(primitive, indexCount, indexSize, 0);
+		if (indexList)
+			GL.BindBuffer(GL_ELEMENT_ARRAY_BUFFER, 0);
 	}
 
 	endDraw(vTypeDesc);
 }
 
-void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, uintptr_t verticesBase)
+void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, const void *vertices, size_t vertexCount)
 {
+	// Client memory is not a valid vertex data source in core profile
+	// contexts, so stream it through a scratch buffer.
+	if (vertices)
+		ScratchVBO.uploadAndBind(vertices, vertexCount * vertexType.VertexSize, GL_STREAM_DRAW);
+
+	// attribute pointers are offsets into the bound vertex buffer
+	const uintptr_t verticesBase = 0;
+
 	for (auto &attr : vertexType) {
 		if (attr.mode == VertexAttribute::Mode::Integer && Version.Major < 3) {
 			// assume we know what we're doing and just skip if not supported
@@ -1057,6 +1120,9 @@ void COpenGL3DriverBase::beginDraw(const VertexType &vertexType, uintptr_t verti
 			break;
 		}
 	}
+
+	if (vertices)
+		GL.BindBuffer(GL_ARRAY_BUFFER, 0);
 }
 
 void COpenGL3DriverBase::endDraw(const VertexType &vertexType)

@@ -422,30 +422,6 @@ public:
 			E_MATERIAL_TYPE baseMaterial = video::EMT_SOLID,
 			s32 userData = 0)override;
 
-	virtual s32 addHighLevelShaderMaterialFromFiles(
-			const io::path &vertexShaderProgramFileName,
-			const io::path &pixelShaderProgramFileName,
-			const io::path &geometryShaderProgramFileName,
-			const c8 *shaderName = nullptr,
-			scene::E_PRIMITIVE_TYPE inType = scene::EPT_TRIANGLES,
-			scene::E_PRIMITIVE_TYPE outType = scene::EPT_TRIANGLE_STRIP,
-			u32 verticesOut = 0,
-			IShaderConstantSetCallBack *callback = nullptr,
-			E_MATERIAL_TYPE baseMaterial = video::EMT_SOLID,
-			s32 userData = 0) override;
-
-	s32 addHighLevelShaderMaterialFromFiles(
-			io::IReadFile *vertexShaderProgram,
-			io::IReadFile *pixelShaderProgram = 0,
-			io::IReadFile *geometryShaderProgram = 0,
-			const c8 *shaderName = nullptr,
-			scene::E_PRIMITIVE_TYPE inType = scene::EPT_TRIANGLES,
-			scene::E_PRIMITIVE_TYPE outType = scene::EPT_TRIANGLE_STRIP,
-			u32 verticesOut = 0,
-			IShaderConstantSetCallBack *callback = nullptr,
-			E_MATERIAL_TYPE baseMaterial = video::EMT_SOLID,
-			s32 userData = 0);
-
 	virtual void deleteShaderMaterial(s32 material) override;
 
 	//! Returns a pointer to the mesh manipulator.
