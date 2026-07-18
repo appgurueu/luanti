@@ -292,7 +292,7 @@ add_subdirectory(lib/lstrpack)
 add_subdirectory(lib/sha256)
 
 if(BUILD_CLIENT)
-	find_package(libzip 1.7.2 CONFIG REQUIRED)
+	find_package(libzip 1.7.2 REQUIRED)
 endif()
 
 if(BUILD_UNITTESTS OR BUILD_BENCHMARKS)
