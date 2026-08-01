@@ -6,6 +6,7 @@
 
 #include <vector>
 #include <cassert>
+#include <cstring>
 
 #include "SMaterialLayer.h"
 #include "ITexture.h"
@@ -407,6 +408,18 @@ public:
 		Driver->irrGlGenerateMipmap(TextureType);
 		TEST_GL_ERROR(Driver);
 
+		// Unlike TEST_GL_ERROR above, this always runs (not just when the
+		// 'opengl_debug' setting is on), since #16896 showed mipmap generation
+		// failing on array textures on some drivers.
+		if (GLenum err = GL.GetError(); err != GL_NO_ERROR) {
+			char buf[160];
+			snprintf_irr(buf, sizeof(buf),
+				"COpenGLCoreTexture: glGenerateMipmap failed (type=%d, %ux%u) "
+				"with GL error 0x%04x", (int)Type, Size.Width, Size.Height,
+				(unsigned)err);
+			os::Printer::log(buf, ELL_ERROR);
+		}
+
 		cache.set(0, prevTexture);
 	}
 
@@ -605,6 +618,19 @@ protected:
 					Size.Width, Size.Height, layers, 0, PixelFormat, PixelType, 0);
 			}
 			TEST_GL_ERROR(Driver);
+			// Unlike TEST_GL_ERROR above, this always runs (not just when the
+			// 'opengl_debug' setting is on): #16896 is about array textures
+			// breaking in ways that are otherwise completely silent, so this
+			// doesn't rely on the user knowing to turn on GL error checking.
+			if (GLenum err = GL.GetError(); err != GL_NO_ERROR) {
+				char buf[200];
+				snprintf_irr(buf, sizeof(buf),
+					"COpenGLCoreTexture: failed to allocate array texture storage "
+					"(%ux%ux%zu, %u level(s), %s) with GL error 0x%04x",
+					Size.Width, Size.Height, layers, levels,
+					use_tex_storage ? "TexStorage3D" : "TexImage3D", (unsigned)err);
+				os::Printer::log(buf, ELL_ERROR);
+			}
 			break;
 		default:
 			assert(false);
@@ -684,25 +710,114 @@ protected:
 		const u32 imageBytes = IImage::getDataSizeFromFormat(ColorFormat, width, height);
 		constexpr size_t MAX_TMP_BUFFER = 16 * 1024 * 1024;
 
-		// Uploading small textures layer-by-layer can apparently be very slow.
-		// Maybe a PBO would be cleaner here but copying to a temporary buffer
-		// isn't too bad.
+		// #16896 showed that array texture uploads can silently end up with
+		// wrong or undefined layer contents on some drivers, without ever
+		// raising a GL error we could detect otherwise. So here we verify the
+		// upload via a full readback, and if that turns up a mismatch, retry
+		// with a smaller batch size (some drivers seem to choke specifically
+		// on large single uploads), all the way down to uploading one layer
+		// at a time, to narrow down the failure.
+		const u32 defaultLayersPerBatch = core::max_<u32>(1, u32(MAX_TMP_BUFFER / imageBytes));
+		u32 layersPerBatch = defaultLayersPerBatch;
+		for (;;) {
+			u32 batchCount = 0;
+			u32 failedBatches = uploadLayersInBatches(layers, images, layersPerBatch,
+					width, height, imageBytes, &batchCount);
+			if (failedBatches > 0) {
+				char buf[160];
+				snprintf_irr(buf, sizeof(buf),
+					"COpenGLCoreTexture: %u/%u glTexSubImage3D batch(es) reported "
+					"a GL error, see above for details", failedBatches, batchCount);
+				os::Printer::log(buf, ELL_ERROR);
+			}
+
+			u32 mismatchedLayers = 0, mismatchedBatches = 0;
+			bool ok = verifyArrayTextureUpload(layers, images, width, height, imageBytes,
+					layersPerBatch, &mismatchedLayers, &mismatchedBatches);
+			if (ok) {
+				if (layersPerBatch != defaultLayersPerBatch) {
+					char buf[160];
+					snprintf_irr(buf, sizeof(buf),
+						"COpenGLCoreTexture: array texture upload verified OK after "
+						"reducing batch size to %u layer(s)", layersPerBatch);
+					os::Printer::log(buf, ELL_INFORMATION);
+				}
+				break;
+			}
+
+			char buf[220];
+			snprintf_irr(buf, sizeof(buf),
+				"COpenGLCoreTexture: array texture upload verification FAILED: "
+				"%u/%zu layer(s) wrong across %u/%u batch(es) (%u layer(s) per batch)",
+				mismatchedLayers, layers, mismatchedBatches, batchCount, layersPerBatch);
+			os::Printer::log(buf, ELL_ERROR);
+
+			if (layersPerBatch <= 1) {
+				os::Printer::log("COpenGLCoreTexture: giving up, corruption persists "
+					"even with 1 layer per batch -- this looks like a genuine "
+					"driver/hardware bug rather than something we can work around",
+					ELL_ERROR);
+				break;
+			}
+			layersPerBatch = core::max_<u32>(1, layersPerBatch / 2);
+			char buf2[100];
+			snprintf_irr(buf2, sizeof(buf2),
+				"COpenGLCoreTexture: retrying array texture upload with %u layer(s) "
+				"per batch", layersPerBatch);
+			os::Printer::log(buf2, ELL_INFORMATION);
+		}
+	}
+
+	/// Helper for upload2DArrayTexture(): uploads `layers` images
+	/// into the array texture, `layersPerBatch` layers per glTexSubImage3D
+	/// call. Immediately checks each batch for a GL error (this is what catches
+	/// "loud" failures) and logs it together with the affected layer range.
+	/// @return number of batches for which a GL error was observed
+	/// @param out_batch_count receives the total number of batches issued
+	u32 uploadLayersInBatches(const size_t layers, video::IImage *const *images,
+			u32 layersPerBatch, u32 width, u32 height, u32 imageBytes,
+			u32 *out_batch_count)
+	{
+		layersPerBatch = core::max_<u32>(1, layersPerBatch);
+
+		// Make sure a non-multiple-of-4 row size (e.g. tightly packed 24-bit
+		// formats) doesn't get padded by the driver, since imageBytes assumes
+		// tight packing.
+		GLint prevUnpack = 4;
+		GL.GetIntegerv(GL_UNPACK_ALIGNMENT, &prevUnpack);
+		GL.PixelStorei(GL_UNPACK_ALIGNMENT, 1);
+
 		std::vector<u8> tmpBuffer;
-		tmpBuffer.reserve(core::min_(imageBytes * layers, MAX_TMP_BUFFER));
+		tmpBuffer.reserve((size_t)imageBytes * layersPerBatch);
 		u32 layerOffset = 0;
-		const auto &uploadMultiple = [&] () {
-			assert(tmpBuffer.size() % imageBytes == 0);
+		u32 failedBatches = 0;
+		u32 batchCount = 0;
+		CImage *tmpImage = nullptr;
+
+		const auto &flush = [&] () {
+			if (tmpBuffer.empty())
+				return;
 			u32 curLayers = u32(tmpBuffer.size() / imageBytes);
-			assert(curLayers > 0);
-			GL.TexSubImage3D(TextureType, 0, 0, 0, layerOffset, width, height, curLayers, PixelFormat, PixelType, tmpBuffer.data());
+			GL.GetError(); // discard any unrelated pending error
+			GL.TexSubImage3D(TextureType, 0, 0, 0, layerOffset, width, height,
+					curLayers, PixelFormat, PixelType, tmpBuffer.data());
+			batchCount++;
+			if (GLenum err = GL.GetError(); err != GL_NO_ERROR) {
+				failedBatches++;
+				char buf[160];
+				snprintf_irr(buf, sizeof(buf),
+					"COpenGLCoreTexture: glTexSubImage3D failed for layers "
+					"[%u, %u) with GL error 0x%04x", layerOffset,
+					layerOffset + curLayers, (unsigned)err);
+				os::Printer::log(buf, ELL_ERROR);
+			}
 			layerOffset += curLayers;
 			tmpBuffer.clear();
 		};
-		CImage *tmpImage = nullptr;
+
 		for (size_t i = 0; i < layers; i++) {
 			u8 *data;
 			if (Converter) {
-				// this may look redundant but CImage does special alignment
 				if (!tmpImage)
 					tmpImage = new CImage(ColorFormat, {width, height});
 				data = reinterpret_cast<u8*>(tmpImage->getData());
@@ -711,13 +826,109 @@ protected:
 				data = reinterpret_cast<u8*>(images[i]->getData());
 			}
 			tmpBuffer.insert(tmpBuffer.end(), data, data + imageBytes);
-			if (tmpBuffer.size() >= MAX_TMP_BUFFER)
-				uploadMultiple();
+			if (tmpBuffer.size() / imageBytes >= layersPerBatch)
+				flush();
 		}
 		delete tmpImage;
-		if (!tmpBuffer.empty())
-			uploadMultiple();
+		flush();
 		assert(layerOffset == layers);
+
+		GL.PixelStorei(GL_UNPACK_ALIGNMENT, prevUnpack);
+
+		if (out_batch_count)
+			*out_batch_count = batchCount;
+		return failedBatches;
+	}
+
+	/// Helper for upload2DArrayTexture(): reads back every layer of
+	/// the array texture via a temporary FBO and compares it against the
+	/// (possibly converted) source images, to catch "silent" upload failures
+	/// that don't raise a GL error.
+	/// @return true if the contents match, or if verification could not be
+	///         performed at all (e.g. unsupported readback format) -- we'd
+	///         rather stay quiet than report a false positive in that case.
+	/// @param mismatched_layers,mismatched_batches only meaningful when this
+	///        function returns false
+	bool verifyArrayTextureUpload(const size_t layers, video::IImage *const *images,
+			u32 width, u32 height, u32 imageBytes, u32 layersPerBatch,
+			u32 *mismatched_layers, u32 *mismatched_batches)
+	{
+		layersPerBatch = core::max_<u32>(1, layersPerBatch);
+
+		GLuint fbo = 0;
+		GL.GenFramebuffers(1, &fbo);
+		if (!fbo) {
+			os::Printer::log("COpenGLCoreTexture: cannot verify array texture "
+				"upload, failed to create framebuffer for readback", ELL_WARNING);
+			return true;
+		}
+
+		GLint prevFBO = 0;
+		GL.GetIntegerv(GL_FRAMEBUFFER_BINDING, &prevFBO);
+		GLint prevPack = 4;
+		GL.GetIntegerv(GL_PACK_ALIGNMENT, &prevPack);
+		GL.PixelStorei(GL_PACK_ALIGNMENT, 1);
+		GL.BindFramebuffer(GL_FRAMEBUFFER, fbo);
+
+		std::vector<u8> readBuf(imageBytes);
+		CImage *tmpImage = nullptr;
+		u32 badLayers = 0, badBatches = 0;
+		u32 lastBadBatch = ~0u;
+		bool can_verify = true;
+
+		for (size_t i = 0; i < layers; i++) {
+			GL.FramebufferTextureLayer(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+					TextureName, 0, (GLint)i);
+			if (GL.CheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+				os::Printer::log("COpenGLCoreTexture: cannot verify array texture "
+					"upload, framebuffer incomplete for readback", ELL_WARNING);
+				can_verify = false;
+				break;
+			}
+
+			GL.GetError(); // discard any unrelated pending error
+			GL.ReadPixels(0, 0, (GLsizei)width, (GLsizei)height, PixelFormat,
+					PixelType, readBuf.data());
+			if (GL.GetError() != GL_NO_ERROR) {
+				os::Printer::log("COpenGLCoreTexture: cannot verify array texture "
+					"upload, glReadPixels failed (unsupported format?)", ELL_WARNING);
+				can_verify = false;
+				break;
+			}
+
+			u8 *expected;
+			if (Converter) {
+				if (!tmpImage)
+					tmpImage = new CImage(ColorFormat, {width, height});
+				expected = reinterpret_cast<u8*>(tmpImage->getData());
+				Converter(images[i]->getData(), width * height, expected);
+			} else {
+				expected = reinterpret_cast<u8*>(images[i]->getData());
+			}
+
+			if (memcmp(readBuf.data(), expected, imageBytes) != 0) {
+				badLayers++;
+				u32 batchIdx = u32(i) / layersPerBatch;
+				if (batchIdx != lastBadBatch) {
+					badBatches++;
+					lastBadBatch = batchIdx;
+				}
+			}
+		}
+
+		delete tmpImage;
+		GL.BindFramebuffer(GL_FRAMEBUFFER, (GLuint)prevFBO);
+		GL.PixelStorei(GL_PACK_ALIGNMENT, prevPack);
+		GL.DeleteFramebuffers(1, &fbo);
+
+		if (!can_verify)
+			return true;
+
+		if (mismatched_layers)
+			*mismatched_layers = badLayers;
+		if (mismatched_batches)
+			*mismatched_batches = badBatches;
+		return badLayers == 0;
 	}
 
 	GLenum TextureTypeIrrToGL(E_TEXTURE_TYPE type) const
