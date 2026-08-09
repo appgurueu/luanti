@@ -138,6 +138,7 @@ void ScriptApiSecurity::initializeSecurity()
 		"rawequal",
 		"rawget",
 		"rawset",
+		"require", // safe as long as package.loaders is sanitized
 		"select",
 		"setfenv",
 		"setmetatable",
@@ -265,7 +266,7 @@ void ScriptApiSecurity::initializeSecurity()
 	SECURE_API(g, load);
 	SECURE_API(g, loadfile);
 	SECURE_API(g, loadstring);
-	SECURE_API(g, require);
+	// require() is harmless with as long as package.loaders is safe
 	lua_pop(L, 1);
 
 
@@ -310,11 +311,9 @@ void ScriptApiSecurity::initializeSecurity()
 	lua_pop(L, 1);  // Pop old debug
 
 
-	// Copy safe package fields
-	lua_getfield(L, old_globals, "package");
+	// Set up clean package table
 	lua_newtable(L);
 	int package = lua_gettop(L);
-	copy_safe(L, package_whitelist, sizeof(package_whitelist));
 	lua_newtable(L);
 	lua_setfield(L, package, "loaded");
 	lua_newtable(L);
@@ -323,7 +322,13 @@ void ScriptApiSecurity::initializeSecurity()
 	lua_newtable(L);
 	lua_setfield(L, package, "loaders");
 	lua_setglobal(L, "package");
-	lua_pop(L, 1);  // Pop old package
+
+	// Adapt require() environment
+	lua_getglobal(L, "require");
+	int require = lua_gettop(L);
+	lua_getglobal(L, "package");
+	lua_setfenv(L, require);
+	lua_setglobal(L, "require");
 
 
 	// Copy safe jit functions, if they exist
@@ -366,6 +371,7 @@ void ScriptApiSecurity::initializeSecurityClient()
 		"rawequal",
 		"rawget",
 		"rawset",
+		"require", // safe as long as package.loaders is sanitized
 		"select",
 		"setfenv",
 		"getmetatable",
@@ -438,7 +444,7 @@ void ScriptApiSecurity::initializeSecurityClient()
 	SECURE_API(g, load);
 	SECURE_API(g, loadfile);
 	SECURE_API(g, loadstring);
-	SECURE_API(g, require);
+	// TODO set up package table for require()
 	lua_pop(L, 2);
 
 
@@ -493,6 +499,7 @@ void ScriptApiSecurity::initializeSecuritySSCSM()
 		"rawequal",
 		"rawget",
 		"rawset",
+		"require", // safe as long as package.loaders is sanitized
 		"select",
 		"setfenv",
 		"getmetatable",
@@ -564,7 +571,6 @@ void ScriptApiSecurity::initializeSecuritySSCSM()
 	SECURE_API(g, load);
 	SECURE_API(g, loadfile);
 	SECURE_API(g, loadstring);
-	SECURE_API(g, require);
 	lua_pop(L, 2);
 
 
@@ -1028,13 +1034,6 @@ int ScriptApiSecurity::sl_g_loadstring(lua_State *L)
 		return 2;
 	}
 	return 1;
-}
-
-
-int ScriptApiSecurity::sl_g_require(lua_State *L)
-{
-	lua_pushliteral(L, "require() is disabled when mod security is on.");
-	return lua_error(L);
 }
 
 

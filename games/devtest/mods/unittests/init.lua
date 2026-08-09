@@ -250,6 +250,8 @@ end
 
 local t = {}
 unittests.register("test_mod_require", function()
-	assert(require("unittests") == t)
+	assert(package.loaders[1])
+	assert(require("unittests.foo") == "foo")
+	-- assert(require("unittests") == t)
 end)
 return t

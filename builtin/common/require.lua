@@ -28,7 +28,7 @@ table.insert(package.loaders, 1, function(path_str)
 		return "Mod not found: " .. modname
 	end
 
-	local stem = modpath .. table.concat(path, "/", 2)
+	local stem = modpath .. "/" .. table.concat(path, "/", 2)
 	if file_is_readable(stem .. ".lua") then
 		return wrapped_loadfile(stem .. ".lua")
 	end
