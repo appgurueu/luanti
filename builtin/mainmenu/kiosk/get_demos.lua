@@ -14,6 +14,7 @@ local function join_server(self)
 	gamedata.password = fosdem_password
 	gamedata.servername = self.name
 	gamedata.serverdescription = self.description
+	gamedata.mode = "join"
 	core.start()
 end
 
@@ -35,7 +36,7 @@ local function start_world(self)
 
 	local idx = menudata.worldlist:raw_index_by_uid(worldname)
 	gamedata.selected_world = idx
-	gamedata.singleplayer = true
+	gamedata.mode = "singleplayer"
 	core.start()
 end
 
@@ -43,7 +44,7 @@ local aes = {
 	type = "server",
 	server = {
 		address = "minetest.aes.land",
-		post = 30010,
+		port = 30010,
 	},
 	title = "A.E.S",
 	author = "Zughy and Friends",
