@@ -228,14 +228,20 @@ public:
 
 	virtual ~COpenGLCoreTexture()
 	{
-		if (TextureName)
+		if (TextureName) {
 			GL.DeleteTextures(1, &TextureName);
+			TextureName = 0;
+		}
 
-		if (LockImage)
+		if (LockImage) {
 			LockImage->drop();
+			LockImage = nullptr;
+		}
 
-		for (auto *image : Images)
+		for (auto *&image : Images) {
 			image->drop();
+			image = nullptr;
+		}
 	}
 
 	void *lock(E_TEXTURE_LOCK_MODE mode = ETLM_READ_WRITE, u32 mipmapLevel = 0, u32 layer = 0, E_TEXTURE_LOCK_FLAGS lockFlags = ETLF_FLIP_Y_UP_RTT) override
