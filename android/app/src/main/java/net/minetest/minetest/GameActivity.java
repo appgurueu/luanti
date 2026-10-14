@@ -29,6 +29,7 @@ import android.content.Intent;
 import android.content.ActivityNotFoundException;
 import android.net.Uri;
 import android.os.Build;
+import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
@@ -39,9 +40,12 @@ import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.Toast;
+import android.window.OnBackInvokedCallback;
+import android.window.OnBackInvokedDispatcher;
 import android.content.res.Configuration;
 
 import androidx.annotation.Keep;
+import androidx.annotation.RequiresApi;
 import androidx.appcompat.app.AlertDialog;
 import androidx.core.content.FileProvider;
 
@@ -86,6 +90,49 @@ public class GameActivity extends SDLActivity {
 
 	private native void saveSettings();
 
+	private OnBackInvokedCallback backInvokedCallback;
+
+	@Override
+	protected void onCreate(Bundle savedInstanceState) {
+		super.onCreate(savedInstanceState);
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+			registerBackInvokedCallback();
+	}
+
+	@Override
+	protected void onDestroy() {
+		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
+			unregisterBackInvokedCallback();
+		super.onDestroy();
+	}
+
+	// Since we target Android 16 the OnBackInvokedCallback is enabled, which
+	// means that onBackPressed() is no longer called and KEYCODE_BACK is no
+	// longer dispatched as a key event on Android 13+.
+	// SDL2 doesn't know about this, so forward the back button to it as if the
+	// key had been pressed. (SDL3 does the same by itself, see
+	// SDLActivity.setBackButtonTrapEnabled() in its Java code.)
+	@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+	private void registerBackInvokedCallback() {
+		final Handler handler = new Handler(Looper.getMainLooper());
+		backInvokedCallback = () -> {
+			if (mBrokenLibraries)
+				return;
+			onNativeKeyDown(KeyEvent.KEYCODE_BACK);
+			handler.postDelayed(() -> onNativeKeyUp(KeyEvent.KEYCODE_BACK), 500);
+		};
+		getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
+			OnBackInvokedDispatcher.PRIORITY_DEFAULT, backInvokedCallback);
+	}
+
+	@RequiresApi(Build.VERSION_CODES.TIRAMISU)
+	private void unregisterBackInvokedCallback() {
+		if (backInvokedCallback == null)
+			return;
+		getOnBackInvokedDispatcher().unregisterOnBackInvokedCallback(backInvokedCallback);
+		backInvokedCallback = null;
+	}
+
 	@Override
 	protected void onStop() {
 		super.onStop();
@@ -114,7 +161,7 @@ public class GameActivity extends SDLActivity {
 		container.setOrientation(LinearLayout.VERTICAL);
 		builder.setView(container);
 		AlertDialog alertDialog = builder.create();
-		CustomEditText editText = new CustomEditText(this, editType);
+		CustomEditText editText = new CustomEditText(this);
 		container.addView(editText);
 		editText.setMaxLines(8);
 		editText.setHint(hint);

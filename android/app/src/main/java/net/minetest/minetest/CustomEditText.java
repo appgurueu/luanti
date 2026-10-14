@@ -22,35 +22,15 @@ with this program; if not, see <https://www.gnu.org/licenses/>.
 package net.minetest.minetest;
 
 import android.content.Context;
-import android.view.KeyEvent;
 import android.view.inputmethod.InputMethodManager;
 
 import androidx.appcompat.widget.AppCompatEditText;
 
-import java.util.Objects;
-
 public class CustomEditText extends AppCompatEditText {
-	private int editType = 2; // single line text input as default
 	private boolean wantsToShowKeyboard = false;
 
 	public CustomEditText(Context context) {
 		super(context);
-	}
-
-	public CustomEditText(Context context, int _editType) {
-		super(context);
-		editType = _editType;
-	}
-
-	@Override
-	public boolean onKeyPreIme(int keyCode, KeyEvent event) {
-		// For multi-line, do not close the dialog after pressing back button
-		if (editType != 1 && keyCode == KeyEvent.KEYCODE_BACK) {
-			InputMethodManager mgr = (InputMethodManager)
-					getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
-			Objects.requireNonNull(mgr).hideSoftInputFromWindow(this.getWindowToken(), 0);
-		}
-		return false;
 	}
 
 	@Override

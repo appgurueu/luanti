@@ -35,6 +35,7 @@ import android.widget.ProgressBar;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import androidx.activity.OnBackPressedCallback;
 import androidx.annotation.RequiresApi;
 import androidx.annotation.StringRes;
 import androidx.appcompat.app.AppCompatActivity;
@@ -103,6 +104,12 @@ public class MainActivity extends AppCompatActivity {
 		mTextView = findViewById(R.id.textView);
 		sharedPreferences = getSharedPreferences(SETTINGS, Context.MODE_PRIVATE);
 
+		// Prevent abrupt interruption when copying game files from assets
+		getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+			@Override
+			public void handleOnBackPressed() {}
+		});
+
 		if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
 			createNotificationChannel();
 
@@ -161,11 +168,6 @@ public class MainActivity extends AppCompatActivity {
 		// It is fine to always create the notification channel because creating a channel
 		// with the same ID is the same as overriding it (only its name and description).
 		notifyManager.createNotificationChannel(notifyChannel);
-	}
-
-	@Override
-	public void onBackPressed() {
-		// Prevent abrupt interruption when copy game files from assets
 	}
 
 	@Override
