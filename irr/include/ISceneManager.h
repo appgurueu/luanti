@@ -108,9 +108,8 @@ public:
 
 	//! Get pointer to an animatable mesh. Loads the file if not loaded already.
 	/**
-	 * If you want to remove a loaded mesh from the cache again, use getMeshCache().
-	 * If you would like to implement and add your own file format loader to Irrlicht,
-	 * see addExternalMeshLoader().
+	 * \see getMeshCache() for managing the cache of loaded meshes.
+	 * \see addExternalMeshLoader() for adding support for new file formats.
 	 * \param file File handle of the mesh to load.
 	 * \return Null if failed, otherwise pointer to the mesh.
 	 * This pointer should not be dropped. See IReferenceCounted::drop() for more information.
