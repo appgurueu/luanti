@@ -245,10 +245,16 @@ TEST_CASE("Stream read", "[serialization]") {
 	CHECK(readS32(is) == -6);
 	CHECK(readS64(is) == -43);
 
-	CHECK(readF1000(is) == 53.534f);
-	CHECK(readF1000(is) == -300000.32f);
-	CHECK(readF1000(is) == F1000_MIN);
-	CHECK(readF1000(is) == F1000_MAX);
+	// F1000 values are decoded by dividing by 1000.0f. Under fast-math flags
+	// (e.g. MSVC /fp:fast) compilers may rewrite this as a multiplication by
+	// 0.001f, which can change the result by 1 ULP. Allow a small tolerance.
+	// See https://github.com/luanti-org/luanti/issues/14879
+	using Catch::Matchers::WithinULP;
+	constexpr u64 f1000_ulps = 1;
+	CHECK_THAT(readF1000(is), WithinULP(53.534f, f1000_ulps));
+	CHECK_THAT(readF1000(is), WithinULP(-300000.32f, f1000_ulps));
+	CHECK_THAT(readF1000(is), WithinULP(F1000_MIN, f1000_ulps));
+	CHECK_THAT(readF1000(is), WithinULP(F1000_MAX, f1000_ulps));
 
 	CHECK(deSerializeString16(is) == "foobar!");
 
@@ -257,7 +263,10 @@ TEST_CASE("Stream read", "[serialization]") {
 	CHECK(readV2S32(is) == v2s32(1920, 1080));
 	CHECK(readV3S32(is) == v3s32(-400, 6400054, 290549855));
 
-	CHECK(readV3F1000(is) == v3f(500, 10024.2f, -192.54f));
+	const v3f vf = readV3F1000(is);
+	CHECK_THAT(vf.X, WithinULP(500.0f, f1000_ulps));
+	CHECK_THAT(vf.Y, WithinULP(10024.2f, f1000_ulps));
+	CHECK_THAT(vf.Z, WithinULP(-192.54f, f1000_ulps));
 	CHECK(readARGB8(is) == video::SColor(255, 128, 50, 128));
 
 	CHECK(deSerializeString32(is) == "some longer string here");
